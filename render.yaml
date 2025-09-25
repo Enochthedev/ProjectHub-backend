@@ -3,7 +3,7 @@ services:
   - type: web
     name: project-hub-backend
     env: node
-    plan: starter
+    plan: free
     buildCommand: ./scripts/build.sh
     startCommand: npm run migration:run:prod && npm run start:prod
     healthCheckPath: /health
@@ -46,13 +46,14 @@ services:
           name: project-hub-redis
           property: connectionString
 
+  # Redis Cache Service
+  - type: redis
+    name: project-hub-redis
+    plan: free
+
 # PostgreSQL Database
 databases:
   - name: project-hub-db
     databaseName: project_hub
     user: project_hub_user
-    plan: starter
-
-# Redis Cache
-  - name: project-hub-redis
-    plan: starter
+    plan: free
