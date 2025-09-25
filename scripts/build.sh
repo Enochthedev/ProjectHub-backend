@@ -13,9 +13,12 @@ npm ci --include=dev --prefer-offline --no-audit --progress=false
 echo "🔨 Building application..."
 NODE_ENV=production npm run build --silent
 
+# Run migrations during build (when we have more memory)
+echo "🗄️ Running database migrations..."
+npm run migration:run:prod || echo "⚠️ Migrations failed, will retry on startup"
+
 # Clean up devDependencies after build to save space
 echo "🧹 Cleaning up dev dependencies..."
 npm prune --production
 
 echo "✅ Build completed successfully!"
-echo "🗄️ Migrations will run on app startup"
