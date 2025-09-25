@@ -1,0 +1,36 @@
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    OneToOne,
+    JoinColumn,
+} from 'typeorm';
+import { User } from './user.entity';
+
+@Entity('supervisor_profiles')
+export class SupervisorProfile {
+    @PrimaryGeneratedColumn('uuid')
+    id: string;
+
+    @Column({ length: 255 })
+    name: string;
+
+    @Column({ type: 'text', array: true })
+    specializations: string[];
+
+    @Column({ default: 5, type: 'int' })
+    maxStudents: number;
+
+    @Column({ default: true })
+    isAvailable: boolean;
+
+    @Column({ nullable: true, length: 255 })
+    officeLocation: string | null;
+
+    @Column({ nullable: true, length: 20 })
+    phoneNumber: string | null;
+
+    @OneToOne(() => User, (user) => user.supervisorProfile)
+    @JoinColumn()
+    user: User;
+}

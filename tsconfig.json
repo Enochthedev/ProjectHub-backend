@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolvePackageJsonExports": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2022",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "paths": {
+      "@/*": ["src/*"],
+      "@/entities": ["src/entities"],
+      "@/dto": ["src/dto"],
+      "@/common": ["src/common"],
+      "@/auth": ["src/auth"],
+      "@/users": ["src/users"],
+      "@/projects": ["src/projects"],
+      "@/bookmarks": ["src/bookmarks"],
+      "@/admin": ["src/admin"],
+      "@/seeds": ["src/seeds"],
+      "@/test": ["src/test"]
+    },
+    "incremental": true,
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "noFallthroughCasesInSwitch": false
+  }
+}
