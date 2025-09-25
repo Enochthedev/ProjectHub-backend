@@ -50,6 +50,7 @@ services:
   - type: redis
     name: project-hub-redis
     plan: free
+    ipAllowList: []
 
 # PostgreSQL Database
 databases:
