@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000/api}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3001}
+        NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-your-secret-key}
+        NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3001}
+    ports:
+      - '3001:3000'
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3000/api}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3001}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-your-secret-key}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3001}
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - projecthub-network
+
+  # Nginx reverse proxy (optional)
+  nginx:
+    image: nginx:alpine
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+    restart: unless-stopped
+    networks:
+      - projecthub-network
+
+networks:
+  projecthub-network:
+    driver: bridge

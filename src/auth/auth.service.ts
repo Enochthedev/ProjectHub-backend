@@ -5,10 +5,15 @@ import {
   BadRequestException,
   NotFoundException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
+import { StudentProfile } from '../entities/student-profile.entity';
+import { SupervisorProfile } from '../entities/supervisor-profile.entity';
 import { RegisterDto } from '../dto/auth/register.dto';
 import { LoginDto } from '../dto/auth/login.dto';
 import { PasswordService } from './services/password.service';
@@ -18,6 +23,7 @@ import { AuditService } from './services/audit.service';
 import { TokenManagementService } from './services/token-management.service';
 import { TokenPair } from './interfaces/token.interface';
 import { UserRole } from '../common/enums/user-role.enum';
+import { NotificationService } from '../services/notification.service';
 
 @Injectable()
 export class AuthService {
@@ -26,12 +32,19 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(StudentProfile)
+    private readonly studentProfileRepository: Repository<StudentProfile>,
+    @InjectRepository(SupervisorProfile)
+    private readonly supervisorProfileRepository: Repository<SupervisorProfile>,
     private readonly passwordService: PasswordService,
     private readonly emailService: EmailService,
     private readonly jwtTokenService: JwtTokenService,
     private readonly auditService: AuditService,
     private readonly tokenManagementService: TokenManagementService,
-  ) {}
+    private readonly configService: ConfigService,
+    @Inject(forwardRef(() => NotificationService))
+    private readonly notificationService?: NotificationService, // Optional to avoid circular dependency
+  ) { }
 
   /**
    * Register a new user with email verification
@@ -80,7 +93,7 @@ export class AuthService {
       password: hashedPassword,
       role,
       emailVerificationToken,
-      isEmailVerified: false,
+      isEmailVerified: this.configService.get('NODE_ENV') === 'development', // Auto-verify in development
       isActive: true,
     });
 
@@ -105,15 +118,22 @@ export class AuthService {
         tokens.refreshToken,
       );
 
-      // Send verification email
-      await this.sendVerificationEmail(savedUser, emailVerificationToken);
+      // Send verification email (skip in development)
+      if (this.configService.get('NODE_ENV') !== 'development') {
+        await this.sendVerificationEmail(savedUser, emailVerificationToken);
+      } else {
+        this.logger.log(
+          `Skipping email verification in development mode for: ${email}`,
+        );
+      }
 
       // Log successful registration
       this.logger.log(`User registered successfully: ${email} (${role})`);
       await this.auditService.logRegistration(savedUser.id, role);
 
-      // Return user without password
-      const { password: _, ...userWithoutPassword } = savedUser;
+      // Get user with profile data
+      const userWithProfile = await this.getUserWithProfile(savedUser.id);
+      const { password: _, ...userWithoutPassword } = userWithProfile;
 
       return {
         user: userWithoutPassword,
@@ -204,8 +224,9 @@ export class AuthService {
       this.logger.log(`User logged in successfully: ${email}`);
       await this.auditService.logLoginSuccess(user.id, ipAddress, userAgent);
 
-      // Return user without password
-      const { password: _, ...userWithoutPassword } = user;
+      // Get user with profile data
+      const userWithProfile = await this.getUserWithProfile(user.id);
+      const { password: _, ...userWithoutPassword } = userWithProfile;
 
       return {
         user: userWithoutPassword,
@@ -461,29 +482,422 @@ export class AuthService {
       interests?: string[];
     },
   ): Promise<void> {
-    // Profile creation will be implemented when profile entities are available
-    // For now, we'll just log the profile data
-    this.logger.log(
-      `Profile data for ${user.email} (${user.role}):`,
-      profileData,
+    try {
+      if (user.role === UserRole.STUDENT) {
+        const studentProfile = this.studentProfileRepository.create({
+          user,
+          name: profileData.name,
+          skills: profileData.skills || [],
+          interests: profileData.interests || [],
+          preferredSpecializations: profileData.specializations || [],
+        });
+        await this.studentProfileRepository.save(studentProfile);
+        this.logger.log(`Created student profile for user: ${user.email}`);
+      } else if (user.role === UserRole.SUPERVISOR) {
+        const supervisorProfile = this.supervisorProfileRepository.create({
+          user,
+          name: profileData.name,
+          specializations: profileData.specializations || [],
+          isAvailable: true,
+          maxStudents: 5, // Default capacity
+        });
+        await this.supervisorProfileRepository.save(supervisorProfile);
+        this.logger.log(`Created supervisor profile for user: ${user.email}`);
+      }
+
+      // Initialize default notification preferences for the user
+      if (this.notificationService) {
+        await this.notificationService.initializeDefaultPreferences(
+          user.id,
+          user.role,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to create profile for user ${user.email}:`,
+        error,
+      );
+      throw new BadRequestException('Failed to create user profile');
+    }
+  }
+
+  /**
+   * Get user with profile data
+   */
+  private async getUserWithProfile(userId: string): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['studentProfile', 'supervisorProfile'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
+  }
+
+  /**
+   * Get user profile
+   */
+  async getProfile(userId: string): Promise<Omit<User, 'password'> & { profile?: any }> {
+    const user = await this.getUserWithProfile(userId);
+
+    // Remove password from response
+    const { password, ...userWithoutPassword } = user;
+
+    // Format profile data based on role
+    const result: Omit<User, 'password'> & { profile?: any } = userWithoutPassword;
+
+    if (user.role === UserRole.STUDENT && user.studentProfile) {
+      result.profile = user.studentProfile;
+    } else if (user.role === UserRole.SUPERVISOR && user.supervisorProfile) {
+      result.profile = user.supervisorProfile;
+    }
+
+    return result;
+  }
+
+  /**
+   * Update user profile
+   */
+  async updateProfile(
+    userId: string,
+    updateData: any,
+  ): Promise<Omit<User, 'password'> & { profile?: any }> {
+    const user = await this.getUserWithProfile(userId);
+
+    try {
+      if (user.role === UserRole.STUDENT && user.studentProfile) {
+        // Update student profile
+        const profileUpdate: Partial<StudentProfile> = {};
+
+        if (updateData.firstName || updateData.lastName) {
+          // Combine first and last name into name field
+          const firstName = updateData.firstName || '';
+          const lastName = updateData.lastName || '';
+          profileUpdate.name = `${firstName} ${lastName}`.trim();
+        }
+        if (updateData.specialization) {
+          profileUpdate.preferredSpecializations = [updateData.specialization];
+        }
+        if (updateData.year) {
+          profileUpdate.currentYear = updateData.year;
+        }
+        if (updateData.interests) {
+          profileUpdate.interests = updateData.interests;
+        }
+        if (updateData.skills) {
+          profileUpdate.skills = updateData.skills;
+        }
+
+        await this.studentProfileRepository.update(
+          user.studentProfile.id,
+          profileUpdate,
+        );
+
+      } else if (user.role === UserRole.SUPERVISOR && user.supervisorProfile) {
+        // Update supervisor profile
+        const profileUpdate: Partial<SupervisorProfile> = {};
+
+        if (updateData.name) {
+          profileUpdate.name = updateData.name;
+        }
+        if (updateData.specializations) {
+          profileUpdate.specializations = updateData.specializations;
+        }
+        if (updateData.capacity !== undefined) {
+          profileUpdate.maxStudents = updateData.capacity;
+        }
+        if (updateData.isAvailable !== undefined) {
+          profileUpdate.isAvailable = updateData.isAvailable;
+        }
+
+        await this.supervisorProfileRepository.update(
+          user.supervisorProfile.id,
+          profileUpdate,
+        );
+      }
+
+      // Log the profile update
+      await this.auditService.logEvent({
+        userId,
+        action: 'PROFILE_UPDATED',
+        resource: 'profile',
+        details: { updatedFields: Object.keys(updateData) },
+      });
+
+      // Return updated profile
+      return this.getProfile(userId);
+
+    } catch (error) {
+      this.logger.error(`Failed to update profile for user ${userId}:`, error);
+      throw new BadRequestException('Failed to update profile');
+    }
+  }
+
+  /**
+   * Change user password
+   */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify current password
+    const isCurrentPasswordValid = await this.passwordService.comparePasswords(
+      currentPassword,
+      user.password,
     );
 
-    // TODO: Implement profile creation when StudentProfile and SupervisorProfile entities are available
-    // if (user.role === UserRole.STUDENT) {
-    //     const studentProfile = this.studentProfileRepository.create({
-    //         user,
-    //         name: profileData.name,
-    //         skills: profileData.skills || [],
-    //         interests: profileData.interests || [],
-    //     });
-    //     await this.studentProfileRepository.save(studentProfile);
-    // } else if (user.role === UserRole.SUPERVISOR) {
-    //     const supervisorProfile = this.supervisorProfileRepository.create({
-    //         user,
-    //         name: profileData.name,
-    //         specializations: profileData.specializations || [],
-    //     });
-    //     await this.supervisorProfileRepository.save(supervisorProfile);
-    // }
+    if (!isCurrentPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    // Hash new password
+    const hashedNewPassword = await this.passwordService.hashPassword(newPassword);
+
+    // Update password
+    await this.userRepository.update(userId, { password: hashedNewPassword });
+
+    // Log password change
+    await this.auditService.logEvent({
+      userId,
+      action: 'PASSWORD_CHANGED',
+      resource: 'auth',
+    });
+
+    this.logger.log(`Password changed for user: ${user.email}`);
+  }
+
+  /**
+   * Delete user account
+   */
+  async deleteAccount(userId: string, password: string): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify password
+    const isPasswordValid = await this.passwordService.comparePasswords(
+      password,
+      user.password,
+    );
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Password is incorrect');
+    }
+
+    try {
+      // Delete related profile data
+      if (user.role === UserRole.STUDENT) {
+        await this.studentProfileRepository.delete({ user: { id: userId } });
+      } else if (user.role === UserRole.SUPERVISOR) {
+        await this.supervisorProfileRepository.delete({ user: { id: userId } });
+      }
+
+      // Revoke all tokens
+      await this.tokenManagementService.revokeAllUserTokens(userId);
+
+      // Log account deletion
+      await this.auditService.logEvent({
+        userId,
+        action: 'ACCOUNT_DELETED',
+        resource: 'auth',
+      });
+
+      // Delete user
+      await this.userRepository.delete(userId);
+
+      this.logger.log(`Account deleted for user: ${user.email}`);
+
+    } catch (error) {
+      this.logger.error(`Failed to delete account for user ${userId}:`, error);
+      throw new BadRequestException('Failed to delete account');
+    }
+  }
+
+  /**
+   * Export user data
+   */
+  async exportUserData(
+    userId: string,
+  ): Promise<{ downloadUrl: string; expiresAt: string }> {
+    const user = await this.getUserWithProfile(userId);
+
+    try {
+      // Collect all user data
+      const userData = {
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          isEmailVerified: user.isEmailVerified,
+          isActive: user.isActive,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+        profile:
+          user.role === UserRole.STUDENT
+            ? user.studentProfile
+            : user.supervisorProfile,
+        // Add other related data as needed (bookmarks, conversations, etc.)
+      };
+
+      // In a real implementation, you would:
+      // 1. Generate a secure file with the data
+      // 2. Store it temporarily in a secure location
+      // 3. Return a signed URL that expires
+
+      // For now, return a mock URL
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours from now
+
+      const downloadUrl = `${this.configService.get('APP_URL')}/api/auth/download-data/${userId}?token=mock-token`;
+
+      // Log data export request
+      await this.auditService.logEvent({
+        userId,
+        action: 'DATA_EXPORTED',
+        resource: 'profile',
+      });
+
+      return {
+        downloadUrl,
+        expiresAt: expiresAt.toISOString(),
+      };
+
+    } catch (error) {
+      this.logger.error(`Failed to export data for user ${userId}:`, error);
+      throw new BadRequestException('Failed to export user data');
+    }
+  }
+
+  /**
+   * Get user settings (placeholder - would need UserSettings entity)
+   */
+  async getUserSettings(userId: string): Promise<any> {
+    // This would typically fetch from a UserSettings entity
+    // For now, return default settings
+    return {
+      id: `settings-${userId}`,
+      userId,
+      notificationPreferences: {
+        emailNotifications: true,
+        milestoneReminders: true,
+        projectUpdates: true,
+        aiAssistantUpdates: false,
+        weeklyDigest: true,
+        marketingEmails: false,
+      },
+      privacySettings: {
+        profileVisibility: 'public',
+        showEmail: false,
+        showProjects: true,
+        allowDirectMessages: true,
+        dataProcessingConsent: true,
+      },
+      language: 'en',
+      timezone: 'UTC',
+      theme: 'system',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Update notification preferences (placeholder)
+   */
+  async updateNotificationPreferences(
+    userId: string,
+    preferences: any,
+  ): Promise<any> {
+    // This would typically update a UserSettings entity
+    // For now, return the updated preferences
+    const settings = await this.getUserSettings(userId);
+    settings.notificationPreferences = {
+      ...settings.notificationPreferences,
+      ...preferences,
+    };
+    settings.updatedAt = new Date().toISOString();
+
+    // Log settings update
+    await this.auditService.logEvent({
+      userId,
+      action: 'NOTIFICATION_PREFERENCES_UPDATED',
+      resource: 'settings',
+      details: { preferences },
+    });
+
+    return settings;
+  }
+
+  /**
+   * Update privacy settings (placeholder)
+   */
+  async updatePrivacySettings(
+    userId: string,
+    privacySettings: any,
+  ): Promise<any> {
+    // This would typically update a UserSettings entity
+    // For now, return the updated settings
+    const settings = await this.getUserSettings(userId);
+    settings.privacySettings = {
+      ...settings.privacySettings,
+      ...privacySettings,
+    };
+    settings.updatedAt = new Date().toISOString();
+
+    // Log settings update
+    await this.auditService.logEvent({
+      userId,
+      action: 'PRIVACY_SETTINGS_UPDATED',
+      resource: 'settings',
+      details: { privacySettings },
+    });
+
+    return settings;
+  }
+
+  /**
+   * Update general settings (placeholder)
+   */
+  async updateGeneralSettings(
+    userId: string,
+    generalSettings: any,
+  ): Promise<any> {
+    // This would typically update a UserSettings entity
+    // For now, return the updated settings
+    const settings = await this.getUserSettings(userId);
+
+    if (generalSettings.language) {
+      settings.language = generalSettings.language;
+    }
+    if (generalSettings.timezone) {
+      settings.timezone = generalSettings.timezone;
+    }
+    if (generalSettings.theme) {
+      settings.theme = generalSettings.theme;
+    }
+
+    settings.updatedAt = new Date().toISOString();
+
+    // Log settings update
+    await this.auditService.logEvent({
+      userId,
+      action: 'GENERAL_SETTINGS_UPDATED',
+      resource: 'settings',
+      details: { generalSettings },
+    });
+
+    return settings;
   }
 }

@@ -13,12 +13,16 @@ import { BookmarkModule } from './modules/bookmark.module';
 import { RecommendationModule } from './modules/recommendation.module';
 import { MilestoneModule } from './modules/milestone.module';
 import { AIAssistantModule } from './modules/ai-assistant.module';
+import { NotificationModule } from './modules/notification.module';
+import { WebSocketModule } from './modules/websocket.module';
+import { DashboardModule } from './modules/dashboard.module';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 import { validate } from './config/env.validation';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import emailConfig from './config/email.config';
 import huggingFaceConfig from './config/hugging-face.config';
+import openRouterConfig from './config/openrouter.config';
 
 @Module({
   imports: [
@@ -26,7 +30,7 @@ import huggingFaceConfig from './config/hugging-face.config';
     ConfigModule.forRoot({
       isGlobal: true,
       validate,
-      load: [databaseConfig, jwtConfig, emailConfig, huggingFaceConfig],
+      load: [databaseConfig, jwtConfig, emailConfig, huggingFaceConfig, openRouterConfig],
     }),
 
     // Database configuration
@@ -80,6 +84,15 @@ import huggingFaceConfig from './config/hugging-face.config';
 
     // AI Assistant module
     AIAssistantModule,
+
+    // Notification module
+    NotificationModule,
+
+    // WebSocket module for real-time features
+    WebSocketModule,
+
+    // Dashboard module for role-based dashboards
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],

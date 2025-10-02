@@ -85,7 +85,7 @@ export class AIAssistantController {
     private readonly adminKnowledgeService: AdminKnowledgeManagementService,
     private readonly projectContextService: ProjectContextIntegrationService,
     private readonly milestoneGuidanceService: MilestoneGuidanceService,
-  ) {}
+  ) { }
 
   // ===== Conversation Management Endpoints =====
 
@@ -254,6 +254,39 @@ export class AIAssistantController {
     const context =
       await this.contextService.buildConversationContext(conversationId);
     return context;
+  }
+
+  @Delete('conversations/:id')
+  @ApiOperation({
+    summary: 'Delete a conversation',
+    description: 'Permanently deletes a conversation and all its messages',
+  })
+  @ApiParam({ name: 'id', description: 'Conversation ID' })
+  @ApiResponse({
+    status: HttpStatus.NO_CONTENT,
+    description: 'Conversation deleted successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Conversation not found',
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'Access denied to conversation',
+  })
+  async deleteConversation(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) conversationId: string,
+  ): Promise<void> {
+    // Verify conversation ownership
+    const conversation =
+      await this.conversationService.getConversationById(conversationId);
+    if (conversation.studentId !== req.user.id) {
+      throw new Error('Access denied to conversation');
+    }
+
+    // Delete the conversation and all its messages
+    await this.conversationService.deleteConversation(conversationId);
   }
 
   // ===== Q&A and Interaction Endpoints =====

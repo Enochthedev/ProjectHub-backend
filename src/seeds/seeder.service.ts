@@ -34,12 +34,58 @@ export class SeederService {
     private readonly projectViewRepository: Repository<ProjectView>,
     @InjectRepository(BookmarkCategory)
     private readonly bookmarkCategoryRepository: Repository<BookmarkCategory>,
-  ) {}
+  ) { }
+
+  async seedAdmins(): Promise<void> {
+    this.logger.log('Seeding admin accounts...');
+
+    const adminData = [
+      {
+        email: 'admin@ui.edu.ng',
+        name: 'System Administrator',
+        role: UserRole.ADMIN,
+      },
+      {
+        email: 'superadmin@ui.edu.ng',
+        name: 'Super Administrator',
+        role: UserRole.ADMIN,
+      },
+      {
+        email: 'hod.cs@ui.edu.ng',
+        name: 'Prof. Adebayo Adeyemi (HOD Computer Science)',
+        role: UserRole.ADMIN,
+      },
+    ];
+
+    for (const admin of adminData) {
+      const existingUser = await this.userRepository.findOne({
+        where: { email: admin.email },
+      });
+
+      if (!existingUser) {
+        const hashedPassword = await bcrypt.hash('AdminPass123!', 12);
+
+        const user = this.userRepository.create({
+          email: admin.email,
+          password: hashedPassword,
+          role: admin.role,
+          isEmailVerified: true,
+          isActive: true,
+        });
+
+        await this.userRepository.save(user);
+        this.logger.log(`Created admin: ${admin.name} (${admin.email})`);
+      } else {
+        this.logger.log(`Admin already exists: ${admin.email}`);
+      }
+    }
+  }
 
   async seedAll(): Promise<void> {
     this.logger.log('Starting database seeding...');
 
     try {
+      await this.seedAdmins();
       await this.seedSupervisors();
       await this.seedStudents();
       await this.seedProjects();
@@ -1575,7 +1621,7 @@ export class SeederService {
           ipAddress: sampleIPs[Math.floor(Math.random() * sampleIPs.length)],
           userAgent:
             sampleUserAgents[
-              Math.floor(Math.random() * sampleUserAgents.length)
+            Math.floor(Math.random() * sampleUserAgents.length)
             ],
           viewedAt,
         });

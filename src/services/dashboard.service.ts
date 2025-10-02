@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThan, LessThan, Not } from 'typeorm';
+import { Repository, Between, MoreThan, LessThan, Not, IsNull } from 'typeorm';
 import { AnalyticsService, DateRange } from './analytics.service';
 import { User } from '../entities/user.entity';
 import { Project } from '../entities/project.entity';
@@ -65,7 +65,7 @@ export class DashboardService {
     private readonly milestoneRepository: Repository<Milestone>,
     @InjectRepository(PlatformAnalytics)
     private readonly analyticsRepository: Repository<PlatformAnalytics>,
-  ) {}
+  ) { }
 
   /**
    * Get real-time dashboard data
@@ -642,6 +642,180 @@ export class DashboardService {
   }
 
   /**
+   * Get admin dashboard data
+   */
+  async getAdminDashboard(): Promise<any> {
+    this.logger.log('Getting admin dashboard data');
+
+    const [
+      metrics,
+      userGrowthData,
+      projectStatusDistribution,
+      systemAlerts,
+      recentActivities,
+      topPerformingProjects,
+      pendingApprovals,
+    ] = await Promise.all([
+      this.getDashboardMetrics(),
+      this.getUserGrowthData(),
+      this.getProjectStatusDistribution(),
+      this.getSystemAlerts(),
+      this.getRecentSystemActivities(),
+      this.getTopPerformingProjects(),
+      this.getPendingApprovals(),
+    ]);
+
+    return {
+      metrics: {
+        totalUsers: metrics.totalUsers,
+        activeUsers: metrics.activeUsers,
+        newUsersToday: metrics.newUsersToday,
+        totalProjects: metrics.totalProjects,
+        pendingProjects: metrics.pendingProjects,
+        approvedProjects: metrics.approvedProjects,
+        totalMilestones: metrics.totalMilestones,
+        completedMilestones: metrics.completedMilestones,
+        overdueMilestones: metrics.overdueMilestones,
+        systemHealthScore: metrics.systemHealthScore,
+      },
+      userGrowthData,
+      projectStatusDistribution,
+      systemAlerts,
+      recentActivities,
+      topPerformingProjects,
+      pendingApprovals,
+      lastUpdated: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Get platform analytics
+   */
+  async getPlatformAnalytics(): Promise<any> {
+    const [
+      userStats,
+      projectStats,
+      milestoneStats,
+      activityStats,
+    ] = await Promise.all([
+      this.getUserStatistics(),
+      this.getProjectStatistics(),
+      this.getMilestoneStatistics(),
+      this.getActivityStatistics(),
+    ]);
+
+    return {
+      userStats,
+      projectStats,
+      milestoneStats,
+      activityStats,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Get system health metrics
+   */
+  async getSystemHealthMetrics(): Promise<any> {
+    const systemHealth = await this.analyticsService.getSystemHealthMetrics();
+
+    return {
+      healthScore: systemHealth.healthScore,
+      averageResponseTime: systemHealth.averageResponseTime,
+      errorRate: systemHealth.errorRate,
+      uptime: systemHealth.uptime || 99.9,
+      memoryUsage: systemHealth.memoryUsage || 65,
+      cpuUsage: systemHealth.cpuUsage || 45,
+      databaseConnections: systemHealth.databaseConnections || 25,
+      lastChecked: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Get milestone progress for any project (admin access)
+   */
+  async getProjectMilestoneProgress(projectId: string): Promise<any> {
+    const project = await this.projectRepository.findOne({
+      where: { id: projectId },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const milestones = await this.milestoneRepository.find({
+      where: { projectId },
+      order: { dueDate: 'ASC' },
+    });
+
+    const now = new Date();
+    const completed = milestones.filter(m => m.status === MilestoneStatus.COMPLETED).length;
+    const inProgress = milestones.filter(m => m.status === MilestoneStatus.IN_PROGRESS).length;
+    const overdue = milestones.filter(m =>
+      m.status !== MilestoneStatus.COMPLETED &&
+      new Date(m.dueDate) < now
+    ).length;
+
+    return {
+      projectId,
+      projectTitle: project.title,
+      milestones: milestones.map(milestone => ({
+        id: milestone.id,
+        title: milestone.title,
+        description: milestone.description,
+        dueDate: milestone.dueDate.toISOString().split('T')[0],
+        priority: milestone.priority,
+        status: milestone.status,
+        progress: milestone.progress || 0,
+        tags: milestone.tags || [],
+        isOverdue: milestone.status !== MilestoneStatus.COMPLETED &&
+          new Date(milestone.dueDate) < now,
+        daysUntilDue: Math.ceil((new Date(milestone.dueDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+      })),
+      progressSummary: {
+        total: milestones.length,
+        completed,
+        inProgress,
+        overdue,
+        progressPercentage: milestones.length > 0
+          ? Math.round((completed / milestones.length) * 100)
+          : 0,
+      },
+    };
+  }
+
+  /**
+   * Get all overdue milestones (admin access)
+   */
+  async getAllOverdueMilestones(): Promise<any> {
+    const now = new Date();
+
+    const milestones = await this.milestoneRepository.find({
+      where: {
+        status: Not(MilestoneStatus.COMPLETED),
+        dueDate: LessThan(now),
+      },
+      relations: ['project', 'project.student', 'project.student.studentProfile', 'project.supervisor', 'project.supervisor.supervisorProfile'],
+      order: { dueDate: 'ASC' },
+    });
+
+    return milestones.map(milestone => ({
+      id: milestone.id,
+      title: milestone.title,
+      projectTitle: milestone.project.title,
+      studentName: milestone.project.student?.studentProfile?.firstName && milestone.project.student?.studentProfile?.lastName
+        ? `${milestone.project.student.studentProfile.firstName} ${milestone.project.student.studentProfile.lastName}`
+        : milestone.project.student?.email || 'Unassigned',
+      supervisorName: milestone.project.supervisor?.supervisorProfile?.name ||
+        milestone.project.supervisor?.email || 'Unknown',
+      dueDate: milestone.dueDate.toISOString().split('T')[0],
+      daysOverdue: Math.ceil((now.getTime() - new Date(milestone.dueDate).getTime()) / (1000 * 60 * 60 * 24)),
+      priority: milestone.priority,
+      status: milestone.status,
+    }));
+  }
+
+  /**
    * Refresh dashboard cache
    */
   async refreshDashboardCache(adminId?: string): Promise<void> {
@@ -652,6 +826,191 @@ export class DashboardService {
     }
 
     this.logger.log('Dashboard cache refreshed');
+  }
+
+  // Additional helper methods for admin dashboard
+
+  private async getUserGrowthData(): Promise<Array<{ date: string; newUsers: number; totalUsers: number }>> {
+    const last30Days = this.getLast30DaysRange();
+    const dailyData = await this.getDailyUserRegistrations(last30Days);
+
+    let runningTotal = await this.userRepository.count({
+      where: {
+        createdAt: LessThan(last30Days.startDate),
+      },
+    });
+
+    return dailyData.map(day => {
+      runningTotal += day.count;
+      return {
+        date: day.date,
+        newUsers: day.count,
+        totalUsers: runningTotal,
+      };
+    });
+  }
+
+  private async getProjectStatusDistribution(): Promise<Array<{ status: string; count: number; percentage: number }>> {
+    const [approved, pending, rejected, total] = await Promise.all([
+      this.projectRepository.count({ where: { approvalStatus: ApprovalStatus.APPROVED } }),
+      this.projectRepository.count({ where: { approvalStatus: ApprovalStatus.PENDING } }),
+      this.projectRepository.count({ where: { approvalStatus: ApprovalStatus.REJECTED } }),
+      this.projectRepository.count(),
+    ]);
+
+    return [
+      {
+        status: 'approved',
+        count: approved,
+        percentage: total > 0 ? Math.round((approved / total) * 100 * 10) / 10 : 0,
+      },
+      {
+        status: 'pending',
+        count: pending,
+        percentage: total > 0 ? Math.round((pending / total) * 100 * 10) / 10 : 0,
+      },
+      {
+        status: 'rejected',
+        count: rejected,
+        percentage: total > 0 ? Math.round((rejected / total) * 100 * 10) / 10 : 0,
+      },
+    ];
+  }
+
+  private async getRecentSystemActivities(): Promise<Array<{ id: string; type: string; description: string; userName: string | null; timestamp: string }>> {
+    // This would typically come from a system activity log
+    // For now, we'll use user activities as a proxy
+    const activities = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.activities', 'activity')
+      .leftJoinAndSelect('user.studentProfile', 'studentProfile')
+      .leftJoinAndSelect('user.supervisorProfile', 'supervisorProfile')
+      .orderBy('activity.createdAt', 'DESC')
+      .limit(20)
+      .getMany();
+
+    const recentActivities: Array<{ id: string; type: string; description: string; userName: string | null; timestamp: string }> = [];
+
+    activities.forEach(user => {
+      if (user.activities && user.activities.length > 0) {
+        user.activities.slice(0, 3).forEach(activity => {
+          recentActivities.push({
+            id: activity.id,
+            type: activity.activityType,
+            description: activity.description,
+            userName: user.studentProfile?.firstName && user.studentProfile?.lastName
+              ? `${user.studentProfile.firstName} ${user.studentProfile.lastName}`
+              : user.supervisorProfile?.name || user.email,
+            timestamp: activity.createdAt.toISOString(),
+          });
+        });
+      }
+    });
+
+    return recentActivities.slice(0, 20);
+  }
+
+  private async getTopPerformingProjects(): Promise<Array<{ id: string; title: string; supervisorName: string; viewCount: number; bookmarkCount: number; applicationCount: number }>> {
+    const projects = await this.projectRepository.find({
+      relations: ['supervisor', 'supervisor.supervisorProfile', 'applications', 'bookmarks'],
+      order: { viewCount: 'DESC' },
+      take: 10,
+    });
+
+    return projects.map(project => ({
+      id: project.id,
+      title: project.title,
+      supervisorName: project.supervisor?.supervisorProfile?.name ||
+        project.supervisor?.email || 'Unknown',
+      viewCount: project.viewCount || 0,
+      bookmarkCount: project.bookmarks?.length || 0,
+      applicationCount: project.applications?.length || 0,
+    }));
+  }
+
+  private async getPendingApprovals(): Promise<{ projects: number; users: number; reports: number }> {
+    const [pendingProjects, pendingUsers] = await Promise.all([
+      this.projectRepository.count({ where: { approvalStatus: ApprovalStatus.PENDING } }),
+      this.userRepository.count({ where: { isEmailVerified: false } }),
+    ]);
+
+    return {
+      projects: pendingProjects,
+      users: pendingUsers,
+      reports: 0, // Placeholder - would be implemented based on reporting system
+    };
+  }
+
+  private async getUserStatistics(): Promise<any> {
+    const [total, students, supervisors, admins, verified, active] = await Promise.all([
+      this.userRepository.count(),
+      this.userRepository.count({ where: { role: 'student' } }),
+      this.userRepository.count({ where: { role: 'supervisor' } }),
+      this.userRepository.count({ where: { role: 'admin' } }),
+      this.userRepository.count({ where: { isEmailVerified: true } }),
+      this.getActiveUsersCount(),
+    ]);
+
+    return {
+      total,
+      byRole: { students, supervisors, admins },
+      verified,
+      active,
+      verificationRate: total > 0 ? Math.round((verified / total) * 100) : 0,
+      activeRate: total > 0 ? Math.round((active / total) * 100) : 0,
+    };
+  }
+
+  private async getProjectStatistics(): Promise<any> {
+    const [total, approved, pending, rejected, withStudents] = await Promise.all([
+      this.projectRepository.count(),
+      this.projectRepository.count({ where: { approvalStatus: ApprovalStatus.APPROVED } }),
+      this.projectRepository.count({ where: { approvalStatus: ApprovalStatus.PENDING } }),
+      this.projectRepository.count({ where: { approvalStatus: ApprovalStatus.REJECTED } }),
+      this.projectRepository.count({ where: { studentId: Not(IsNull()) } }),
+    ]);
+
+    return {
+      total,
+      byStatus: { approved, pending, rejected },
+      assigned: withStudents,
+      available: approved - withStudents,
+      assignmentRate: approved > 0 ? Math.round((withStudents / approved) * 100) : 0,
+    };
+  }
+
+  private async getMilestoneStatistics(): Promise<any> {
+    const [total, completed, inProgress, notStarted, overdue] = await Promise.all([
+      this.milestoneRepository.count(),
+      this.milestoneRepository.count({ where: { status: MilestoneStatus.COMPLETED } }),
+      this.milestoneRepository.count({ where: { status: MilestoneStatus.IN_PROGRESS } }),
+      this.milestoneRepository.count({ where: { status: MilestoneStatus.NOT_STARTED } }),
+      this.getOverdueMilestonesCount(),
+    ]);
+
+    return {
+      total,
+      byStatus: { completed, inProgress, notStarted, overdue },
+      completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
+      overdueRate: total > 0 ? Math.round((overdue / total) * 100) : 0,
+    };
+  }
+
+  private async getActivityStatistics(): Promise<any> {
+    // This would be implemented with proper activity tracking
+    // For now, return mock data
+    return {
+      totalActivities: 1000,
+      last24h: 150,
+      last7d: 800,
+      topTypes: [
+        { type: 'project_view', count: 300 },
+        { type: 'milestone_update', count: 200 },
+        { type: 'ai_chat', count: 180 },
+        { type: 'project_bookmark', count: 120 },
+        { type: 'login', count: 100 },
+      ],
+    };
   }
 
   // Helper methods

@@ -69,6 +69,13 @@ export class Project {
   @Column({ name: 'supervisor_id' })
   supervisorId: string;
 
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'student_id' })
+  student: User | null;
+
+  @Column({ name: 'student_id', nullable: true })
+  studentId: string | null;
+
   @OneToMany(() => ProjectBookmark, (bookmark) => bookmark.project)
   bookmarks: ProjectBookmark[];
 

@@ -105,7 +105,7 @@ export class InputSanitizationService {
 
     const maxLength =
       this.MAX_LENGTHS[
-        `PROJECT_${type.toUpperCase()}` as keyof typeof this.MAX_LENGTHS
+      `PROJECT_${type.toUpperCase()}` as keyof typeof this.MAX_LENGTHS
       ];
 
     // Check length

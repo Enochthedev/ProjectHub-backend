@@ -66,7 +66,7 @@ import { User } from '../entities/user.entity';
 export class AdminUserManagementController {
   constructor(
     private readonly userManagementService: AdminUserManagementService,
-  ) {}
+  ) { }
 
   /**
    * Get paginated list of users with advanced filtering
@@ -91,6 +91,10 @@ export class AdminUserManagementController {
     description: 'Forbidden - Admin access required',
   })
   @Get()
+  @ApiOperation({
+    summary: 'Get all users with filtering',
+    description: 'Retrieves a paginated list of users with optional filtering by role, status, and date range',
+  })
   async getUsers(@Query() filters: UserFiltersDto): Promise<PaginatedUsersDto> {
     // Convert string dates to Date objects
     const processedFilters = {

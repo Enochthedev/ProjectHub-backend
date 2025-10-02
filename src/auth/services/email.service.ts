@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import * as nodemailer from 'nodemailer';
 import { randomBytes, createHash } from 'crypto';
 import {
@@ -7,7 +9,10 @@ import {
   EmailVerificationData,
   PasswordResetData,
   WelcomeEmailData,
+  EmailDeliveryStatus,
+  EmailQueueItem,
 } from '../interfaces/email.interface';
+import { EmailDelivery, EmailStatus, EmailType } from '../../entities/email-delivery.entity';
 import { emailVerificationTemplate } from '../templates/email-verification.template';
 import { passwordResetTemplate } from '../templates/password-reset.template';
 import { welcomeTemplate } from '../templates/welcome.template';
@@ -16,14 +21,25 @@ import { welcomeTemplate } from '../templates/welcome.template';
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter;
+  private emailQueue: EmailQueueItem[] = [];
+  private isProcessingQueue = false;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    @InjectRepository(EmailDelivery)
+    private readonly emailDeliveryRepository: Repository<EmailDelivery>,
+  ) {
     this.initializeTransporter();
+    this.startQueueProcessor();
   }
 
   private initializeTransporter() {
     const emailUser = this.configService.get<string>('EMAIL_USER');
     const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
+    const emailHost = this.configService.get<string>('EMAIL_HOST', 'smtp.gmail.com');
+    const emailPort = this.configService.get<number>('EMAIL_PORT', 587);
+    const emailSecure = this.configService.get<boolean>('EMAIL_SECURE', false);
+    const emailService = this.configService.get<string>('EMAIL_SERVICE');
 
     // Skip email configuration if credentials are not provided
     if (!emailUser || !emailPassword || emailUser === 'your-email@gmail.com') {
@@ -33,20 +49,47 @@ export class EmailService {
       return;
     }
 
-    const emailConfig = {
-      host: this.configService.get<string>('EMAIL_HOST'),
-      port: this.configService.get<number>('EMAIL_PORT'),
-      secure: false, // true for 465, false for other ports
-      auth: {
-        user: emailUser,
-        pass: emailPassword,
-      },
-    };
+    let emailConfig: any;
+
+    // Support for different email services
+    if (emailService) {
+      // Use predefined service (Gmail, Outlook, etc.)
+      emailConfig = {
+        service: emailService,
+        auth: {
+          user: emailUser,
+          pass: emailPassword,
+        },
+      };
+    } else {
+      // Custom SMTP configuration
+      emailConfig = {
+        host: emailHost,
+        port: emailPort,
+        secure: emailSecure, // true for 465, false for other ports
+        auth: {
+          user: emailUser,
+          pass: emailPassword,
+        },
+        // Additional security options for production
+        tls: {
+          rejectUnauthorized: this.configService.get<boolean>('EMAIL_TLS_REJECT_UNAUTHORIZED', true),
+        },
+        // Connection timeout
+        connectionTimeout: this.configService.get<number>('EMAIL_CONNECTION_TIMEOUT', 60000),
+        // Socket timeout
+        socketTimeout: this.configService.get<number>('EMAIL_SOCKET_TIMEOUT', 60000),
+        // Pool configuration for better performance
+        pool: this.configService.get<boolean>('EMAIL_POOL', true),
+        maxConnections: this.configService.get<number>('EMAIL_MAX_CONNECTIONS', 5),
+        maxMessages: this.configService.get<number>('EMAIL_MAX_MESSAGES', 100),
+      };
+    }
 
     this.transporter = nodemailer.createTransport(emailConfig);
 
     // Verify connection configuration
-    this.transporter.verify((error, success) => {
+    this.transporter.verify((error) => {
       if (error) {
         this.logger.error('Email transporter configuration error:', error);
       } else {
@@ -56,33 +99,202 @@ export class EmailService {
   }
 
   /**
-   * Send email with the provided options
+   * Start the email queue processor
    */
-  async sendEmail(options: EmailOptions): Promise<void> {
-    if (!this.transporter) {
-      this.logger.warn(
-        `Email sending skipped (no transporter configured): ${options.subject} to ${options.to}`,
-      );
+  private startQueueProcessor() {
+    // Process queue every 30 seconds
+    setInterval(() => {
+      if (!this.isProcessingQueue && this.emailQueue.length > 0) {
+        this.processEmailQueue();
+      }
+    }, 30000);
+
+    // Also process failed emails every 5 minutes
+    setInterval(() => {
+      void this.retryFailedEmails();
+    }, 300000);
+  }
+
+  /**
+   * Process the email queue
+   */
+  private async processEmailQueue() {
+    if (this.isProcessingQueue || this.emailQueue.length === 0) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+    this.logger.log(`Processing email queue with ${this.emailQueue.length} items`);
+
+    try {
+      const emailsToProcess = this.emailQueue.splice(0, 10); // Process up to 10 emails at once
+
+      for (const emailItem of emailsToProcess) {
+        try {
+          await this.sendQueuedEmail(emailItem);
+        } catch (error) {
+          this.logger.error(`Failed to send queued email ${emailItem.id}:`, error);
+        }
+      }
+    } finally {
+      this.isProcessingQueue = false;
+    }
+  }
+
+  /**
+   * Send a queued email
+   */
+  private async sendQueuedEmail(emailItem: EmailQueueItem) {
+    const delivery = await this.emailDeliveryRepository.findOne({
+      where: { id: emailItem.id },
+    });
+
+    if (!delivery) {
+      this.logger.warn(`Email delivery record not found: ${emailItem.id}`);
+      return;
+    }
+
+    // Check if email is scheduled for future
+    if (emailItem.scheduledAt && emailItem.scheduledAt > new Date()) {
+      // Put back in queue for later processing
+      this.emailQueue.push(emailItem);
       return;
     }
 
     try {
-      const mailOptions = {
-        from: `"FYP Platform" <${this.configService.get<string>('EMAIL_USER')}>`,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
-      };
+      delivery.status = EmailStatus.SENDING;
+      await this.emailDeliveryRepository.save(delivery);
 
-      const info = await this.transporter.sendMail(mailOptions);
-      this.logger.log(
-        `Email sent successfully to ${options.to}: ${info.messageId}`,
-      );
+      const result = await this.sendEmailDirect({
+        to: emailItem.to,
+        subject: emailItem.subject,
+        html: emailItem.html,
+        text: emailItem.text,
+      });
+
+      delivery.status = EmailStatus.SENT;
+      delivery.messageId = result.messageId;
+      delivery.sentAt = new Date();
+      await this.emailDeliveryRepository.save(delivery);
+
+      this.logger.log(`Email sent successfully: ${emailItem.id} to ${emailItem.to}`);
     } catch (error) {
-      this.logger.error(`Failed to send email to ${options.to}:`, error);
-      throw new Error('Failed to send email');
+      delivery.status = EmailStatus.FAILED;
+      delivery.errorMessage = error.message;
+      delivery.failedAt = new Date();
+      delivery.retryCount += 1;
+      await this.emailDeliveryRepository.save(delivery);
+
+      // Retry if under max retries
+      if (delivery.retryCount < delivery.maxRetries) {
+        this.logger.warn(`Email failed, will retry: ${emailItem.id} (attempt ${delivery.retryCount}/${delivery.maxRetries})`);
+        // Schedule retry with exponential backoff
+        const retryDelay = Math.pow(2, delivery.retryCount) * 60000; // 2^n minutes
+        setTimeout(() => {
+          this.emailQueue.push(emailItem);
+        }, retryDelay);
+      } else {
+        this.logger.error(`Email failed permanently after ${delivery.maxRetries} attempts: ${emailItem.id}`);
+      }
     }
+  }
+
+  /**
+   * Retry failed emails that haven't exceeded max retries
+   */
+  private async retryFailedEmails() {
+    const failedEmails = await this.emailDeliveryRepository.find({
+      where: {
+        status: EmailStatus.FAILED,
+      },
+      take: 50, // Limit to 50 failed emails per retry cycle
+    });
+
+    for (const delivery of failedEmails) {
+      if (delivery.retryCount < delivery.maxRetries) {
+        // Add back to queue for retry
+        this.emailQueue.push({
+          id: delivery.id,
+          to: delivery.to,
+          subject: delivery.subject,
+          html: '', // Will be regenerated
+          text: '',
+          type: delivery.type,
+          retryCount: delivery.retryCount,
+          maxRetries: delivery.maxRetries,
+          metadata: delivery.metadata || undefined,
+        });
+      }
+    }
+  }
+
+  /**
+   * Add email to queue for processing
+   */
+  private async queueEmail(options: EmailOptions): Promise<string> {
+    const delivery = this.emailDeliveryRepository.create({
+      to: options.to,
+      subject: options.subject,
+      type: options.type || EmailType.NOTIFICATION,
+      status: EmailStatus.QUEUED,
+      scheduledAt: options.scheduledAt,
+      metadata: options.metadata,
+    });
+
+    const savedDelivery = await this.emailDeliveryRepository.save(delivery);
+
+    const queueItem: EmailQueueItem = {
+      id: savedDelivery.id,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+      type: options.type || EmailType.NOTIFICATION,
+      scheduledAt: options.scheduledAt,
+      retryCount: 0,
+      maxRetries: 3,
+      metadata: options.metadata,
+    };
+
+    this.emailQueue.push(queueItem);
+    this.logger.log(`Email queued: ${savedDelivery.id} to ${options.to}`);
+
+    return savedDelivery.id;
+  }
+
+  /**
+   * Send email with the provided options
+   */
+  async sendEmail(options: EmailOptions): Promise<string> {
+    if (!this.transporter) {
+      this.logger.warn(
+        `Email sending skipped (no transporter configured): ${options.subject} to ${options.to}`,
+      );
+      throw new Error('Email service not configured');
+    }
+
+    // Queue email for processing
+    return this.queueEmail(options);
+  }
+
+  /**
+   * Send email directly without queueing (for immediate sending)
+   */
+  private async sendEmailDirect(options: Omit<EmailOptions, 'type' | 'scheduledAt' | 'metadata'>): Promise<{ messageId: string }> {
+    if (!this.transporter) {
+      throw new Error('Email transporter not configured');
+    }
+
+    const mailOptions = {
+      from: `"FYP Platform" <${this.configService.get<string>('EMAIL_USER')}>`,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+    };
+
+    const info = await this.transporter.sendMail(mailOptions);
+    return { messageId: info.messageId };
   }
 
   /**
@@ -109,28 +321,32 @@ export class EmailService {
   /**
    * Send email verification email
    */
-  async sendEmailVerification(data: EmailVerificationData): Promise<void> {
+  async sendEmailVerification(data: EmailVerificationData): Promise<string> {
     const { html, text } = emailVerificationTemplate(data);
 
-    await this.sendEmail({
+    return this.sendEmail({
       to: data.email,
       subject: 'Verify Your Email - FYP Platform',
       html,
       text,
+      type: EmailType.VERIFICATION,
+      metadata: { userId: data.email },
     });
   }
 
   /**
    * Send password reset email
    */
-  async sendPasswordReset(data: PasswordResetData): Promise<void> {
+  async sendPasswordReset(data: PasswordResetData): Promise<string> {
     const { html, text } = passwordResetTemplate(data);
 
-    await this.sendEmail({
+    return this.sendEmail({
       to: data.email,
       subject: 'Reset Your Password - FYP Platform',
       html,
       text,
+      type: EmailType.PASSWORD_RESET,
+      metadata: { userId: data.email },
     });
   }
 
@@ -139,14 +355,16 @@ export class EmailService {
    */
   async sendWelcomeEmailAfterVerification(
     data: WelcomeEmailData,
-  ): Promise<void> {
+  ): Promise<string> {
     const { html, text } = welcomeTemplate(data);
 
-    await this.sendEmail({
+    return this.sendEmail({
       to: data.email,
       subject: 'Welcome to FYP Platform!',
       html,
       text,
+      type: EmailType.WELCOME,
+      metadata: { userId: data.email, role: data.role },
     });
   }
 
@@ -316,11 +534,10 @@ FYP Platform Team
                 <p>Hello,</p>
                 <p>Your account has been <strong style="color: ${statusColor};">${status}</strong> by an administrator.</p>
                 ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
-                ${
-                  isActive
-                    ? '<p>You can now log in to your account and access the platform.</p>'
-                    : '<p>You will no longer be able to access your account. If you believe this is an error, please contact the administrator.</p>'
-                }
+                ${isActive
+        ? '<p>You can now log in to your account and access the platform.</p>'
+        : '<p>You will no longer be able to access your account. If you believe this is an error, please contact the administrator.</p>'
+      }
                 <p>If you have any questions, please contact the administrator.</p>
                 <p>Best regards,<br>FYP Platform Team</p>
             </div>
@@ -335,11 +552,10 @@ Your account has been ${status} by an administrator.
 
 ${reason ? `Reason: ${reason}` : ''}
 
-${
-  isActive
-    ? 'You can now log in to your account and access the platform.'
-    : 'You will no longer be able to access your account. If you believe this is an error, please contact the administrator.'
-}
+${isActive
+        ? 'You can now log in to your account and access the platform.'
+        : 'You will no longer be able to access your account. If you believe this is an error, please contact the administrator.'
+      }
 
 If you have any questions, please contact the administrator.
 
@@ -356,14 +572,126 @@ FYP Platform Team
   }
 
   /**
+   * Get email delivery status
+   */
+  async getEmailDeliveryStatus(deliveryId: string): Promise<EmailDeliveryStatus | null> {
+    const delivery = await this.emailDeliveryRepository.findOne({
+      where: { id: deliveryId },
+    });
+
+    if (!delivery) {
+      return null;
+    }
+
+    return {
+      id: delivery.id,
+      status: delivery.status,
+      messageId: delivery.messageId || undefined,
+      errorMessage: delivery.errorMessage || undefined,
+      retryCount: delivery.retryCount,
+      sentAt: delivery.sentAt || undefined,
+      deliveredAt: delivery.deliveredAt || undefined,
+      failedAt: delivery.failedAt || undefined,
+    };
+  }
+
+  /**
+   * Get email delivery statistics
+   */
+  async getEmailDeliveryStats(startDate?: Date, endDate?: Date): Promise<{
+    total: number;
+    sent: number;
+    failed: number;
+    pending: number;
+    byType: Record<EmailType, number>;
+  }> {
+    const query = this.emailDeliveryRepository.createQueryBuilder('delivery');
+
+    if (startDate) {
+      query.andWhere('delivery.createdAt >= :startDate', { startDate });
+    }
+    if (endDate) {
+      query.andWhere('delivery.createdAt <= :endDate', { endDate });
+    }
+
+    const deliveries = await query.getMany();
+
+    const stats = {
+      total: deliveries.length,
+      sent: deliveries.filter(d => d.status === EmailStatus.SENT).length,
+      failed: deliveries.filter(d => d.status === EmailStatus.FAILED).length,
+      pending: deliveries.filter(d => [EmailStatus.QUEUED, EmailStatus.SENDING].includes(d.status)).length,
+      byType: {} as Record<EmailType, number>,
+    };
+
+    // Count by type
+    Object.values(EmailType).forEach(type => {
+      stats.byType[type] = deliveries.filter(d => d.type === type).length;
+    });
+
+    return stats;
+  }
+
+  /**
+   * Schedule email for future delivery
+   */
+  async scheduleEmail(options: EmailOptions, scheduledAt: Date): Promise<string> {
+    return this.sendEmail({
+      ...options,
+      scheduledAt,
+    });
+  }
+
+  /**
+   * Cancel scheduled email
+   */
+  async cancelScheduledEmail(deliveryId: string): Promise<boolean> {
+    const delivery = await this.emailDeliveryRepository.findOne({
+      where: { id: deliveryId, status: EmailStatus.QUEUED },
+    });
+
+    if (!delivery) {
+      return false;
+    }
+
+    await this.emailDeliveryRepository.remove(delivery);
+
+    // Remove from queue if present
+    const queueIndex = this.emailQueue.findIndex(item => item.id === deliveryId);
+    if (queueIndex !== -1) {
+      this.emailQueue.splice(queueIndex, 1);
+    }
+
+    return true;
+  }
+
+  /**
    * Send test email (for development/testing purposes)
    */
-  async sendTestEmail(to: string): Promise<void> {
-    await this.sendEmail({
+  async sendTestEmail(to: string): Promise<string> {
+    return this.sendEmail({
       to,
       subject: 'Test Email - FYP Platform',
       html: '<h1>Test Email</h1><p>This is a test email from the FYP Platform.</p>',
       text: 'Test Email\n\nThis is a test email from the FYP Platform.',
+      type: EmailType.TEST,
+      metadata: { testEmail: true },
+    });
+  }
+
+  /**
+   * Send immediate test email (bypass queue for testing)
+   */
+  async sendImmediateTestEmail(to: string): Promise<{ messageId: string }> {
+    if (!this.transporter) {
+      throw new Error('Email service not configured');
+    }
+
+    return this.sendEmailDirect({
+      to,
+      subject: 'Immediate Test Email - FYP Platform',
+      html: '<h1>Immediate Test Email</h1><p>This email was sent immediately without queueing.</p>',
+      text: 'Immediate Test Email\n\nThis email was sent immediately without queueing.',
     });
   }
 }

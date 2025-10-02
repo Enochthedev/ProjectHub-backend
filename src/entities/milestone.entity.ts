@@ -83,6 +83,9 @@ export class Milestone {
   @Column({ type: 'uuid', nullable: true })
   templateId: string | null;
 
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: Record<string, any> | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

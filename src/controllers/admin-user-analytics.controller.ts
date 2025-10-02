@@ -50,7 +50,7 @@ import {
 @Roles(UserRole.ADMIN)
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class AdminUserAnalyticsController {
-  constructor(private readonly analyticsService: AdminUserAnalyticsService) {}
+  constructor(private readonly analyticsService: AdminUserAnalyticsService) { }
 
   /**
    * Get user growth analytics
@@ -89,6 +89,10 @@ export class AdminUserAnalyticsController {
     description: 'Forbidden - Admin access required',
   })
   @Get('growth')
+  @ApiOperation({
+    summary: 'Get user growth analytics',
+    description: 'Retrieves user growth analytics including registration trends and user acquisition metrics',
+  })
   async getUserGrowthAnalytics(
     @Query() query: UserAnalyticsQueryDto,
   ): Promise<UserGrowthAnalyticsDto> {
@@ -135,6 +139,10 @@ export class AdminUserAnalyticsController {
     description: 'Forbidden - Admin access required',
   })
   @Get('activity')
+  @ApiOperation({
+    summary: 'Get user activity metrics',
+    description: 'Retrieves user activity metrics including login frequency, session duration, and feature usage',
+  })
   async getUserActivityMetrics(
     @Query() query: UserAnalyticsQueryDto,
   ): Promise<UserActivityMetricsDto> {
@@ -167,6 +175,10 @@ export class AdminUserAnalyticsController {
     description: 'Forbidden - Admin access required',
   })
   @Get('engagement')
+  @ApiOperation({
+    summary: 'Get user engagement metrics',
+    description: 'Retrieves user engagement metrics including feature adoption, retention rates, and interaction patterns',
+  })
   async getUserEngagementMetrics(): Promise<UserEngagementMetricsDto> {
     return this.analyticsService.getUserEngagementMetrics();
   }
@@ -322,6 +334,10 @@ export class AdminUserAnalyticsController {
     },
   })
   @Get('dashboard')
+  @ApiOperation({
+    summary: 'Get analytics dashboard',
+    description: 'Retrieves comprehensive analytics dashboard with user metrics, growth trends, and activity summaries',
+  })
   async getAnalyticsDashboard(): Promise<any> {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -408,6 +424,10 @@ export class AdminUserAnalyticsController {
     },
   })
   @Get('role/:role')
+  @ApiOperation({
+    summary: 'Get role-specific analytics',
+    description: 'Retrieves analytics data filtered by user role (student, supervisor, admin)',
+  })
   async getRoleAnalytics(@Query('role') role: UserRole): Promise<any> {
     const [growthAnalytics, engagementMetrics, demographicAnalysis] =
       await Promise.all([

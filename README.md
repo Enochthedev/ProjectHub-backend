@@ -1,96 +1,415 @@
-# FYP Platform Backend
+# ProjectHub - Final Year Project Management Platform
 
-Authentication and User Management service for the Final Year Project Selection & Guidance Platform.
+A comprehensive platform for managing final year projects with AI-powered guidance, real-time collaboration, and intelligent project recommendations.
 
-## Setup
+## 🚀 Features
 
-### Prerequisites
+- **User Management**: Multi-role authentication (Students, Supervisors, Admins)
+- **Project Discovery**: Advanced search and filtering with intelligent recommendations
+- **AI Assistant**: Context-aware guidance powered by Hugging Face and OpenAI
+- **Real-time Collaboration**: WebSocket-based updates and notifications
+- **Milestone Tracking**: Comprehensive project progress monitoring
+- **Calendar Integration**: Sync with Google Calendar and Outlook
+- **Bookmark System**: Save and organize projects and AI conversations
+- **Analytics Dashboard**: Insights for supervisors and administrators
+- **Email Notifications**: Automated updates and reminders
 
-- Node.js (v18 or higher)
-- PostgreSQL database
-- npm or yarn
+## 📋 Table of Contents
 
-### Installation
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Development](#development)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [API Documentation](#api-documentation)
+- [Contributing](#contributing)
 
-1. Install dependencies:
+## 🏗️ Architecture
 
-\`\`\`bash
+```
+┌─────────────────────────────────────────────────────────┐
+│                     Frontend (Next.js)                   │
+│  - Server-side rendering                                 │
+│  - Real-time updates via WebSocket                       │
+│  - Responsive design with Tailwind CSS                   │
+└────────────────────┬────────────────────────────────────┘
+                     │
+                     │ REST API / WebSocket
+                     │
+┌────────────────────▼────────────────────────────────────┐
+│                  Backend (NestJS)                        │
+│  - RESTful API                                           │
+│  - WebSocket Gateway                                     │
+│  - JWT Authentication                                    │
+│  - Rate Limiting & Security                              │
+└────────┬──────────┬──────────┬─────────────────────────┘
+         │          │          │
+         │          │          │
+    ┌────▼───┐  ┌──▼────┐  ┌──▼──────┐
+    │ PostgreSQL│  │ Redis │  │ AI APIs │
+    │ Database  │  │ Cache │  │ (HF/OAI)│
+    └──────────┘  └───────┘  └─────────┘
+```
+
+## 📦 Prerequisites
+
+### Required
+- **Node.js** 18+ ([Download](https://nodejs.org/))
+- **PostgreSQL** 14+ ([Download](https://www.postgresql.org/download/))
+- **Redis** 6+ ([Download](https://redis.io/download))
+- **npm** or **yarn**
+
+### Optional
+- **Docker** & **Docker Compose** (for containerized deployment)
+- **Git** (for version control)
+
+## 🛠️ Installation
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-username/projecthub.git
+cd projecthub
+```
+
+### 2. Install Backend Dependencies
+
+```bash
 npm install
-\`\`\`
+```
 
-2. Copy environment variables:
+### 3. Install Frontend Dependencies
 
-\`\`\`bash
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### 4. Configure Environment Variables
+
+#### Backend Configuration
+
+```bash
 cp .env.example .env
-\`\`\`
+```
 
-3. Update the `.env` file with your database credentials and other configuration values.
+Edit `.env` with your configuration:
 
-4. Start the development server:
+```env
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/projecthub
 
-\`\`\`bash
+# JWT
+JWT_SECRET=your-super-secret-jwt-key
+JWT_REFRESH_SECRET=your-super-secret-refresh-key
+
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# Email
+EMAIL_HOST=smtp.gmail.com
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASSWORD=your-app-password
+
+# AI Services
+HUGGING_FACE_API_KEY=your-hugging-face-key
+OPENAI_API_KEY=your-openai-key
+```
+
+#### Frontend Configuration
+
+```bash
+cd frontend
+cp .env.example .env.local
+```
+
+Edit `frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3001
+NEXT_PUBLIC_WS_URL=ws://localhost:3001
+```
+
+### 5. Setup Database
+
+```bash
+# Run migrations
+npm run migration:run
+
+# Seed database (optional)
+npm run seed
+```
+
+## 🚀 Development
+
+### Start Backend
+
+```bash
 npm run start:dev
-\`\`\`
+```
 
-The server will start on `http://localhost:3001` by default.
+Backend will run on `http://localhost:3001`
 
-### Environment Variables
+### Start Frontend
 
-| Variable                 | Description              | Default               |
-| ------------------------ | ------------------------ | --------------------- |
-| `DATABASE_HOST`          | PostgreSQL host          | localhost             |
-| `DATABASE_PORT`          | PostgreSQL port          | 5432                  |
-| `DATABASE_USERNAME`      | Database username        | postgres              |
-| `DATABASE_PASSWORD`      | Database password        | password              |
-| `DATABASE_NAME`          | Database name            | fyp_platform          |
-| `JWT_SECRET`             | JWT signing secret       | -                     |
-| `JWT_EXPIRES_IN`         | Access token expiration  | 15m                   |
-| `JWT_REFRESH_SECRET`     | Refresh token secret     | -                     |
-| `JWT_REFRESH_EXPIRES_IN` | Refresh token expiration | 7d                    |
-| `PORT`                   | Server port              | 3001                  |
-| `NODE_ENV`               | Environment              | development           |
-| `FRONTEND_URL`           | Frontend URL for CORS    | http://localhost:3000 |
+```bash
+cd frontend
+npm run dev
+```
 
-### Available Scripts
+Frontend will run on `http://localhost:3000`
 
-- `npm run start` - Start the application
-- `npm run start:dev` - Start in development mode with hot reload
-- `npm run start:debug` - Start in debug mode
-- `npm run build` - Build the application
-- `npm run test` - Run unit tests
-- `npm run test:e2e` - Run end-to-end tests
-- `npm run lint` - Run ESLint
-- `npm run format` - Format code with Prettier
+### Start Redis (if not running)
 
-### Database Migrations
+```bash
+redis-server
+```
 
-- `npm run migration:generate -- src/migrations/MigrationName` - Generate a new migration
-- `npm run migration:run` - Run pending migrations
-- `npm run migration:revert` - Revert the last migration
+### Development with Docker
 
-## API Documentation
+```bash
+docker-compose up -d
+```
 
-Once the server is running, API documentation will be available at:
+This starts all services (backend, frontend, PostgreSQL, Redis)
 
-- Swagger UI: `http://localhost:3001/api/docs` (to be implemented)
+## 🧪 Testing
 
-## Health Check
+### Backend Tests
 
-Check if the service is running:
+```bash
+# Unit tests
+npm test
 
-\`\`\`bash
-curl http://localhost:3001/health
-\`\`\`
+# E2E tests
+npm run test:e2e
 
-## Project Structure
+# Test coverage
+npm run test:cov
+```
 
-\`\`\`
-src/
-├── auth/           # Authentication module
-├── users/          # User management module
-├── common/         # Shared utilities, guards, decorators
-├── config/         # Configuration files
-├── entities/       # Database entities
-├── dto/           # Data Transfer Objects
-└── migrations/    # Database migrations
-\`\`\`
+### Frontend Tests
+
+```bash
+cd frontend
+
+# Unit tests
+npm test
+
+# E2E tests
+npm run test:e2e
+
+# Accessibility tests
+npm run test:a11y
+
+# Performance tests
+npm run test:performance
+```
+
+### Run All Tests
+
+```bash
+npm run test:all
+```
+
+## 📦 Building for Production
+
+### Backend Build
+
+```bash
+npm run build
+```
+
+### Frontend Build
+
+```bash
+cd frontend
+npm run build
+```
+
+### Build Both
+
+```bash
+./scripts/build.sh
+```
+
+## 🚢 Deployment
+
+### Quick Deploy to Render
+
+```bash
+./scripts/render-deploy.sh
+```
+
+This script will:
+1. Run tests
+2. Build applications
+3. Validate configuration
+4. Push to repository
+5. Provide deployment instructions
+
+### Manual Deployment
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for comprehensive deployment guide.
+
+### Deployment Options
+
+- **Render** (Recommended) - Automated deployment with `render.yaml`
+- **Docker** - Containerized deployment with Docker Compose
+- **Manual** - Traditional server deployment
+
+### Pre-Deployment Checklist
+
+Review [PRE_DEPLOYMENT_CHECKLIST.md](./PRE_DEPLOYMENT_CHECKLIST.md) before deploying.
+
+## 📚 API Documentation
+
+### Quick Reference
+
+See [API_QUICK_REFERENCE.md](./API_QUICK_REFERENCE.md) for API endpoints.
+
+### Full Documentation
+
+- **Backend API**: [FRONTEND_API_DOCUMENTATION.md](./FRONTEND_API_DOCUMENTATION.md)
+- **Data Structures**: [API_DATA_STRUCTURES.md](./API_DATA_STRUCTURES.md)
+- **Frontend Guide**: [FRONTEND_DEVELOPMENT_SUMMARY.md](./FRONTEND_DEVELOPMENT_SUMMARY.md)
+
+### API Endpoints
+
+```
+POST   /auth/register          - Register new user
+POST   /auth/login             - Login user
+POST   /auth/refresh           - Refresh access token
+GET    /projects               - List projects
+POST   /projects               - Create project
+GET    /projects/:id           - Get project details
+POST   /bookmarks              - Create bookmark
+GET    /ai-assistant/chat      - AI chat endpoint
+GET    /health                 - Health check
+```
+
+## 🔒 Security
+
+- JWT-based authentication
+- Bcrypt password hashing
+- Rate limiting on all endpoints
+- CORS protection
+- Input validation and sanitization
+- SQL injection prevention
+- XSS protection
+- Security headers (HSTS, CSP, etc.)
+
+## 🎯 Performance
+
+- Redis caching
+- Database query optimization
+- Code splitting and lazy loading
+- Image optimization
+- Bundle size optimization
+- CDN integration
+- Service worker caching
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Guidelines
+
+- Follow TypeScript best practices
+- Write tests for new features
+- Update documentation
+- Follow commit message conventions
+- Ensure all tests pass before submitting PR
+
+## 📝 Environment Variables
+
+### Backend
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | Yes | - |
+| `JWT_SECRET` | JWT signing secret | Yes | - |
+| `JWT_REFRESH_SECRET` | Refresh token secret | Yes | - |
+| `REDIS_URL` | Redis connection string | Yes | - |
+| `EMAIL_HOST` | SMTP host | Yes | - |
+| `EMAIL_USER` | SMTP username | Yes | - |
+| `EMAIL_PASSWORD` | SMTP password | Yes | - |
+| `HUGGING_FACE_API_KEY` | Hugging Face API key | Yes | - |
+| `OPENAI_API_KEY` | OpenAI API key | No | - |
+| `PORT` | Server port | No | 3001 |
+
+### Frontend
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `NEXT_PUBLIC_API_URL` | Backend API URL | Yes | - |
+| `NEXT_PUBLIC_WS_URL` | WebSocket URL | Yes | - |
+| `NEXT_PUBLIC_APP_ENV` | Environment | No | development |
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Database Connection Failed**
+```bash
+# Check PostgreSQL is running
+pg_isready
+
+# Verify DATABASE_URL format
+echo $DATABASE_URL
+```
+
+**Redis Connection Failed**
+```bash
+# Check Redis is running
+redis-cli ping
+
+# Should return: PONG
+```
+
+**Frontend Can't Connect to Backend**
+- Verify `NEXT_PUBLIC_API_URL` is correct
+- Check CORS configuration in backend
+- Ensure backend is running
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for more troubleshooting tips.
+
+## 📊 Monitoring
+
+- Health checks: `/health` endpoint
+- Metrics: `/api/metrics` (Prometheus format)
+- Logs: Structured logging with Winston
+- Error tracking: Sentry integration (optional)
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 👥 Team
+
+- **Backend Lead**: [Your Name]
+- **Frontend Lead**: [Your Name]
+- **DevOps**: [Your Name]
+
+## 🙏 Acknowledgments
+
+- NestJS framework
+- Next.js framework
+- Hugging Face for AI models
+- All contributors and supporters
+
+## 📞 Support
+
+- **Documentation**: See `/docs` folder
+- **Issues**: [GitHub Issues](https://github.com/your-username/projecthub/issues)
+- **Email**: support@projecthub.com
+
+---
+
+**Built with ❤️ for Final Year Project Management**

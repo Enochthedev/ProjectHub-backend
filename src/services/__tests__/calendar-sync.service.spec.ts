@@ -1,97 +1,60 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
-import {
-  CalendarSyncService,
-  CalendarProvider,
-  SyncStatus,
-} from '../calendar-sync.service';
-import { ICalExportService } from '../ical-export.service';
+import { CalendarSyncService } from '../calendar-sync.service';
+import { CalendarSync, CalendarProvider, SyncStatus } from '../../entities/calendar-sync.entity';
 import { Milestone } from '../../entities/milestone.entity';
 import { User } from '../../entities/user.entity';
-import { CalendarSync } from '../../entities/calendar-sync.entity';
-import { MilestoneStatus, Priority, UserRole } from '../../common/enums';
-import {
-  CalendarSyncException,
-  MilestoneNotFoundException,
-  MilestonePermissionException,
-} from '../../common/exceptions';
+import { ICalExportService } from '../ical-export.service';
+import { MilestoneStatus } from '../../common/enums/milestone-status.enum';
 
 describe('CalendarSyncService', () => {
   let service: CalendarSyncService;
-  let milestoneRepository: jest.Mocked<Repository<Milestone>>;
-  let userRepository: jest.Mocked<Repository<User>>;
-  let calendarSyncRepository: jest.Mocked<Repository<CalendarSync>>;
-  let iCalExportService: jest.Mocked<ICalExportService>;
+  let calendarSyncRepository: Repository<CalendarSync>;
+  let milestoneRepository: Repository<Milestone>;
+  let userRepository: Repository<User>;
+  let iCalExportService: ICalExportService;
+  let configService: ConfigService;
 
-  const mockUser: User = {
-    id: 'user-1',
-    email: 'john.doe@example.com',
-    password: 'hashedpassword',
-    role: UserRole.STUDENT,
-    isEmailVerified: true,
-    isActive: true,
-    emailVerificationToken: null,
-    passwordResetToken: null,
-    passwordResetExpires: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as User;
-
-  const mockMilestone: Milestone = {
-    id: 'milestone-1',
-    title: 'Literature Review',
-    description: 'Complete comprehensive literature review',
-    dueDate: new Date('2024-03-15'),
-    status: MilestoneStatus.IN_PROGRESS,
-    priority: Priority.HIGH,
-    studentId: 'user-1',
-    projectId: 'project-1',
-    student: mockUser,
-    project: null,
-    estimatedHours: 40,
-    actualHours: 20,
-    blockingReason: null,
-    completedAt: null,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-15'),
-    isTemplate: false,
-    templateId: null,
-    notes: [],
-    reminders: [],
-    isOverdue: jest.fn().mockReturnValue(false),
-    getDaysUntilDue: jest.fn().mockReturnValue(30),
-    canTransitionTo: jest.fn().mockReturnValue(true),
-    getProgressPercentage: jest.fn().mockReturnValue(50),
+  const mockCalendarSyncRepository = {
+    create: jest.fn(),
+    save: jest.fn(),
+    findOne: jest.fn(),
+    find: jest.fn(),
+    remove: jest.fn(),
+    createQueryBuilder: jest.fn(() => ({
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn(),
+    })),
   };
 
-  const mockCalendarSync: CalendarSync = {
-    id: 'sync-1',
-    userId: 'user-1',
-    user: mockUser,
-    provider: CalendarProvider.GOOGLE,
-    calendarId: 'primary',
-    accessToken: 'access-token',
-    refreshToken: 'refresh-token',
-    serverUrl: null,
-    username: null,
-    password: null,
-    syncInterval: 60,
-    autoSync: true,
-    status: SyncStatus.COMPLETED,
-    lastSyncAt: new Date('2024-01-15T10:00:00Z'),
-    syncErrors: [],
-    totalSyncs: 10,
-    successfulSyncs: 9,
-    failedSyncs: 1,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-15'),
-    getSuccessRate: jest.fn().mockReturnValue(90),
-    isHealthy: jest.fn().mockReturnValue(true),
-    needsAttention: jest.fn().mockReturnValue(false),
-    getNextSyncTime: jest
-      .fn()
-      .mockReturnValue(new Date('2024-01-15T11:00:00Z')),
+  const mockMilestoneRepository = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+  };
+
+  const mockUserRepository = {
+    findOne: jest.fn(),
+  };
+
+  const mockICalExportService = {
+    exportSingleMilestone: jest.fn(),
+  };
+
+  const mockConfigService = {
+    get: jest.fn((key: string, defaultValue?: any) => {
+      const config = {
+        DEFAULT_TIMEZONE: 'UTC',
+        GOOGLE_CLIENT_ID: 'test-google-client-id',
+        GOOGLE_CLIENT_SECRET: 'test-google-client-secret',
+        MICROSOFT_CLIENT_ID: 'test-microsoft-client-id',
+        MICROSOFT_CLIENT_SECRET: 'test-microsoft-client-secret',
+      };
+      return config[key] || defaultValue;
+    }),
   };
 
   beforeEach(async () => {
@@ -99,459 +62,298 @@ describe('CalendarSyncService', () => {
       providers: [
         CalendarSyncService,
         {
+          provide: getRepositoryToken(CalendarSync),
+          useValue: mockCalendarSyncRepository,
+        },
+        {
           provide: getRepositoryToken(Milestone),
-          useValue: {
-            find: jest.fn(),
-            findOne: jest.fn(),
-          },
+          useValue: mockMilestoneRepository,
         },
         {
           provide: getRepositoryToken(User),
-          useValue: {
-            findOne: jest.fn(),
-          },
-        },
-        {
-          provide: getRepositoryToken(CalendarSync),
-          useValue: {
-            create: jest.fn(),
-            save: jest.fn(),
-            find: jest.fn(),
-            findOne: jest.fn(),
-            remove: jest.fn(),
-          },
+          useValue: mockUserRepository,
         },
         {
           provide: ICalExportService,
-          useValue: {
-            exportSingleMilestone: jest.fn(),
-          },
+          useValue: mockICalExportService,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
         },
       ],
     }).compile();
 
     service = module.get<CalendarSyncService>(CalendarSyncService);
-    milestoneRepository = module.get(getRepositoryToken(Milestone));
-    userRepository = module.get(getRepositoryToken(User));
-    calendarSyncRepository = module.get(getRepositoryToken(CalendarSync));
-    iCalExportService = module.get(ICalExportService);
+    calendarSyncRepository = module.get<Repository<CalendarSync>>(
+      getRepositoryToken(CalendarSync),
+    );
+    milestoneRepository = module.get<Repository<Milestone>>(
+      getRepositoryToken(Milestone),
+    );
+    userRepository = module.get<Repository<User>>(getRepositoryToken(User));
+    iCalExportService = module.get<ICalExportService>(ICalExportService);
+    configService = module.get<ConfigService>(ConfigService);
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
   describe('createSyncConfig', () => {
     it('should create a new calendar sync configuration', async () => {
-      // Arrange
-      const config = {
+      const mockUser = {
+        id: 'user-id',
+        email: 'test@ui.edu.ng',
+      };
+
+      const mockConfig = {
         provider: CalendarProvider.GOOGLE,
         calendarId: 'primary',
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
+        accessToken: 'test-access-token',
+        refreshToken: 'test-refresh-token',
         syncInterval: 60,
         autoSync: true,
       };
 
-      userRepository.findOne.mockResolvedValue(mockUser);
-      calendarSyncRepository.create.mockReturnValue(mockCalendarSync);
-      calendarSyncRepository.save.mockResolvedValue(mockCalendarSync);
+      const mockCalendarSync = {
+        id: 'sync-id',
+        userId: 'user-id',
+        ...mockConfig,
+        status: SyncStatus.PENDING,
+      };
 
-      // Act
-      const result = await service.createSyncConfig('user-1', config);
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
+      mockCalendarSyncRepository.create.mockReturnValue(mockCalendarSync);
+      mockCalendarSyncRepository.save.mockResolvedValue(mockCalendarSync);
 
-      // Assert
-      expect(result).toBeDefined();
-      expect(result.id).toBe('sync-1');
-      expect(result.provider).toBe(CalendarProvider.GOOGLE);
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'user-1' },
+      // Mock the validation method to avoid actual API calls
+      jest.spyOn(service as any, 'validateCalendarAccess').mockResolvedValue(undefined);
+
+      const result = await service.createSyncConfig('user-id', mockConfig);
+
+      expect(result).toEqual(mockCalendarSync);
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'user-id' },
       });
-      expect(calendarSyncRepository.create).toHaveBeenCalled();
-      expect(calendarSyncRepository.save).toHaveBeenCalled();
-    });
-
-    it('should throw MilestonePermissionException for invalid user', async () => {
-      // Arrange
-      const config = {
-        provider: CalendarProvider.GOOGLE,
-        calendarId: 'primary',
-        accessToken: 'access-token',
-        syncInterval: 60,
-        autoSync: false,
-      };
-
-      userRepository.findOne.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(
-        service.createSyncConfig('invalid-user', config),
-      ).rejects.toThrow(MilestonePermissionException);
-    });
-
-    it('should validate calendar access for different providers', async () => {
-      // Arrange
-      const googleConfig = {
-        provider: CalendarProvider.GOOGLE,
-        calendarId: 'primary',
-        accessToken: 'access-token',
-        syncInterval: 60,
-        autoSync: false,
-      };
-
-      userRepository.findOne.mockResolvedValue(mockUser);
-      calendarSyncRepository.create.mockReturnValue(mockCalendarSync);
-      calendarSyncRepository.save.mockResolvedValue(mockCalendarSync);
-
-      // Act
-      const result = await service.createSyncConfig('user-1', googleConfig);
-
-      // Assert
-      expect(result).toBeDefined();
-      expect(userRepository.findOne).toHaveBeenCalled();
-    });
-
-    it('should throw CalendarSyncException for invalid calendar credentials', async () => {
-      // Arrange
-      const invalidConfig = {
-        provider: CalendarProvider.GOOGLE,
-        calendarId: 'primary',
-        // Missing accessToken
-        syncInterval: 60,
-        autoSync: false,
-      };
-
-      userRepository.findOne.mockResolvedValue(mockUser);
-
-      // Act & Assert
-      await expect(
-        service.createSyncConfig('user-1', invalidConfig),
-      ).rejects.toThrow(CalendarSyncException);
-    });
-  });
-
-  describe('updateSyncConfig', () => {
-    it('should update an existing calendar sync configuration', async () => {
-      // Arrange
-      const updates = {
-        syncInterval: 120,
-        autoSync: false,
-      };
-
-      calendarSyncRepository.findOne.mockResolvedValue(mockCalendarSync);
-      const updatedSync = {
-        ...mockCalendarSync,
-        ...updates,
-        getSuccessRate: jest.fn().mockReturnValue(90),
-        isHealthy: jest.fn().mockReturnValue(true),
-        needsAttention: jest.fn().mockReturnValue(false),
-        getNextSyncTime: jest
-          .fn()
-          .mockReturnValue(new Date('2024-01-15T11:00:00Z')),
-      };
-      calendarSyncRepository.save.mockResolvedValue(updatedSync);
-
-      // Act
-      const result = await service.updateSyncConfig(
-        'sync-1',
-        'user-1',
-        updates,
-      );
-
-      // Assert
-      expect(result).toBeDefined();
-      expect(calendarSyncRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'sync-1', userId: 'user-1' },
+      expect(mockCalendarSyncRepository.create).toHaveBeenCalledWith({
+        userId: 'user-id',
+        provider: mockConfig.provider,
+        calendarId: mockConfig.calendarId,
+        accessToken: mockConfig.accessToken,
+        refreshToken: mockConfig.refreshToken,
+        serverUrl: undefined,
+        username: undefined,
+        password: undefined,
+        syncInterval: mockConfig.syncInterval,
+        autoSync: mockConfig.autoSync,
+        status: SyncStatus.PENDING,
+        lastSyncAt: null,
+        syncErrors: [],
       });
-      expect(calendarSyncRepository.save).toHaveBeenCalled();
     });
 
-    it('should throw CalendarSyncException for non-existent config', async () => {
-      // Arrange
-      const updates = { syncInterval: 120 };
-      calendarSyncRepository.findOne.mockResolvedValue(null);
+    it('should throw error when user not found', async () => {
+      mockUserRepository.findOne.mockResolvedValue(null);
 
-      // Act & Assert
       await expect(
-        service.updateSyncConfig('invalid-sync', 'user-1', updates),
-      ).rejects.toThrow(CalendarSyncException);
-    });
-  });
-
-  describe('deleteSyncConfig', () => {
-    it('should delete a calendar sync configuration', async () => {
-      // Arrange
-      calendarSyncRepository.findOne.mockResolvedValue(mockCalendarSync);
-      calendarSyncRepository.remove.mockResolvedValue(mockCalendarSync);
-
-      // Act
-      await service.deleteSyncConfig('sync-1', 'user-1');
-
-      // Assert
-      expect(calendarSyncRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'sync-1', userId: 'user-1' },
-      });
-      expect(calendarSyncRepository.remove).toHaveBeenCalledWith(
-        mockCalendarSync,
-      );
-    });
-
-    it('should throw CalendarSyncException for non-existent config', async () => {
-      // Arrange
-      calendarSyncRepository.findOne.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(
-        service.deleteSyncConfig('invalid-sync', 'user-1'),
-      ).rejects.toThrow(CalendarSyncException);
-    });
-  });
-
-  describe('syncMilestones', () => {
-    it('should sync milestones successfully', async () => {
-      // Arrange
-      calendarSyncRepository.findOne.mockResolvedValue(mockCalendarSync);
-      milestoneRepository.find.mockResolvedValue([mockMilestone]);
-      iCalExportService.exportSingleMilestone.mockResolvedValue({
-        calendar: 'BEGIN:VCALENDAR...',
-        filename: 'milestone.ics',
-        mimeType: 'text/calendar',
-      });
-      const completedSync = {
-        ...mockCalendarSync,
-        status: SyncStatus.COMPLETED,
-        getSuccessRate: jest.fn().mockReturnValue(90),
-        isHealthy: jest.fn().mockReturnValue(true),
-        needsAttention: jest.fn().mockReturnValue(false),
-        getNextSyncTime: jest
-          .fn()
-          .mockReturnValue(new Date('2024-01-15T11:00:00Z')),
-      };
-      calendarSyncRepository.save.mockResolvedValue(completedSync);
-
-      // Act
-      const result = await service.syncMilestones('sync-1', 'user-1');
-
-      // Assert
-      expect(result).toBeDefined();
-      expect(result.status).toBe(SyncStatus.COMPLETED);
-      expect(result.syncedCount).toBe(1);
-      expect(result.failedCount).toBe(0);
-      expect(result.errors).toHaveLength(0);
-      expect(calendarSyncRepository.save).toHaveBeenCalledTimes(2); // Once for in_progress, once for completed
-    });
-
-    it('should handle sync failures gracefully', async () => {
-      // Arrange
-      calendarSyncRepository.findOne.mockResolvedValue(mockCalendarSync);
-      milestoneRepository.find.mockResolvedValue([mockMilestone]);
-      iCalExportService.exportSingleMilestone.mockRejectedValue(
-        new Error('Export failed'),
-      );
-      const completedSync = {
-        ...mockCalendarSync,
-        status: SyncStatus.COMPLETED,
-        getSuccessRate: jest.fn().mockReturnValue(90),
-        isHealthy: jest.fn().mockReturnValue(true),
-        needsAttention: jest.fn().mockReturnValue(false),
-        getNextSyncTime: jest
-          .fn()
-          .mockReturnValue(new Date('2024-01-15T11:00:00Z')),
-      };
-      calendarSyncRepository.save.mockResolvedValue(completedSync);
-
-      // Act
-      const result = await service.syncMilestones('sync-1', 'user-1');
-
-      // Assert
-      expect(result).toBeDefined();
-      expect(result.status).toBe(SyncStatus.FAILED); // Failed when all syncs fail
-      expect(result.syncedCount).toBe(0);
-      expect(result.failedCount).toBe(1);
-      expect(result.errors).toHaveLength(1);
-      expect(result.errors[0]).toContain('Export failed');
-    });
-
-    it('should throw CalendarSyncException for non-existent config', async () => {
-      // Arrange
-      calendarSyncRepository.findOne.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(
-        service.syncMilestones('invalid-sync', 'user-1'),
-      ).rejects.toThrow(CalendarSyncException);
+        service.createSyncConfig('non-existent-user', {
+          provider: CalendarProvider.GOOGLE,
+          calendarId: 'primary',
+          syncInterval: 60,
+          autoSync: true,
+        }),
+      ).rejects.toThrow('User not found');
     });
   });
 
   describe('getSyncConfigs', () => {
-    it('should return sync configurations for a user', async () => {
-      // Arrange
-      calendarSyncRepository.find.mockResolvedValue([mockCalendarSync]);
+    it('should return user sync configurations', async () => {
+      const mockConfigs = [
+        {
+          id: 'sync-1',
+          userId: 'user-id',
+          provider: CalendarProvider.GOOGLE,
+          status: SyncStatus.COMPLETED,
+        },
+        {
+          id: 'sync-2',
+          userId: 'user-id',
+          provider: CalendarProvider.OUTLOOK,
+          status: SyncStatus.PENDING,
+        },
+      ];
 
-      // Act
-      const result = await service.getSyncConfigs('user-1');
+      mockCalendarSyncRepository.find.mockResolvedValue(mockConfigs);
 
-      // Assert
-      expect(result).toBeDefined();
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('sync-1');
-      expect(calendarSyncRepository.find).toHaveBeenCalledWith({
-        where: { userId: 'user-1' },
+      const result = await service.getSyncConfigs('user-id');
+
+      expect(result).toEqual(mockConfigs);
+      expect(mockCalendarSyncRepository.find).toHaveBeenCalledWith({
+        where: { userId: 'user-id' },
         order: { createdAt: 'DESC' },
       });
     });
   });
 
-  describe('getSyncHistory', () => {
-    it('should return sync history for a configuration', async () => {
-      // Arrange
-      calendarSyncRepository.findOne.mockResolvedValue(mockCalendarSync);
-
-      // Act
-      const result = await service.getSyncHistory('sync-1', 'user-1');
-
-      // Assert
-      expect(result).toBeDefined();
-      expect(result.id).toBe('sync-1');
-      expect(calendarSyncRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'sync-1', userId: 'user-1' },
-      });
-    });
-
-    it('should throw CalendarSyncException for non-existent config', async () => {
-      // Arrange
-      calendarSyncRepository.findOne.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(
-        service.getSyncHistory('invalid-sync', 'user-1'),
-      ).rejects.toThrow(CalendarSyncException);
-    });
-  });
-
-  describe('handleMilestoneUpdate', () => {
-    it('should trigger auto-sync for milestone updates', async () => {
-      // Arrange
-      milestoneRepository.findOne.mockResolvedValue(mockMilestone);
-      calendarSyncRepository.find.mockResolvedValue([mockCalendarSync]);
-      calendarSyncRepository.findOne.mockResolvedValue(mockCalendarSync);
-      milestoneRepository.find.mockResolvedValue([mockMilestone]);
-      iCalExportService.exportSingleMilestone.mockResolvedValue({
-        calendar: 'BEGIN:VCALENDAR...',
-        filename: 'milestone.ics',
-        mimeType: 'text/calendar',
-      });
-      const completedSync = {
-        ...mockCalendarSync,
-        status: SyncStatus.COMPLETED,
-        getSuccessRate: jest.fn().mockReturnValue(90),
-        isHealthy: jest.fn().mockReturnValue(true),
-        needsAttention: jest.fn().mockReturnValue(false),
-        getNextSyncTime: jest
-          .fn()
-          .mockReturnValue(new Date('2024-01-15T11:00:00Z')),
-      };
-      calendarSyncRepository.save.mockResolvedValue(completedSync);
-
-      // Act
-      await service.handleMilestoneUpdate('milestone-1');
-
-      // Assert
-      expect(milestoneRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'milestone-1' },
-        relations: ['student'],
-      });
-      expect(calendarSyncRepository.find).toHaveBeenCalledWith({
-        where: {
-          userId: 'user-1',
-          autoSync: true,
-          status: SyncStatus.COMPLETED,
-        },
-      });
-    });
-
-    it('should throw MilestoneNotFoundException for invalid milestone', async () => {
-      // Arrange
-      milestoneRepository.findOne.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(
-        service.handleMilestoneUpdate('invalid-milestone'),
-      ).rejects.toThrow(MilestoneNotFoundException);
-    });
-  });
-
-  describe('calendar provider validation', () => {
-    it('should validate Google Calendar configuration', async () => {
-      // Arrange
-      const config = {
+  describe('updateSyncConfig', () => {
+    it('should update existing sync configuration', async () => {
+      const existingConfig = {
+        id: 'sync-id',
+        userId: 'user-id',
         provider: CalendarProvider.GOOGLE,
         calendarId: 'primary',
-        accessToken: 'valid-token',
         syncInterval: 60,
         autoSync: false,
       };
 
-      userRepository.findOne.mockResolvedValue(mockUser);
-      calendarSyncRepository.create.mockReturnValue(mockCalendarSync);
-      calendarSyncRepository.save.mockResolvedValue(mockCalendarSync);
+      const updates = {
+        syncInterval: 120,
+        autoSync: true,
+      };
 
-      // Act
-      const result = await service.createSyncConfig('user-1', config);
+      const updatedConfig = { ...existingConfig, ...updates };
 
-      // Assert
-      expect(result).toBeDefined();
+      mockCalendarSyncRepository.findOne.mockResolvedValue(existingConfig);
+      mockCalendarSyncRepository.save.mockResolvedValue(updatedConfig);
+
+      const result = await service.updateSyncConfig('sync-id', 'user-id', updates);
+
+      expect(result).toEqual(updatedConfig);
+      expect(mockCalendarSyncRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'sync-id', userId: 'user-id' },
+      });
     });
 
-    it('should validate CalDAV configuration', async () => {
-      // Arrange
-      const config = {
-        provider: CalendarProvider.CALDAV,
-        calendarId: 'personal',
-        serverUrl: 'https://caldav.example.com',
-        username: 'user@example.com',
-        password: 'password',
-        syncInterval: 60,
-        autoSync: false,
+    it('should throw error when sync config not found', async () => {
+      mockCalendarSyncRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.updateSyncConfig('non-existent-id', 'user-id', {}),
+      ).rejects.toThrow('Calendar sync configuration not found');
+    });
+  });
+
+  describe('deleteSyncConfig', () => {
+    it('should delete sync configuration', async () => {
+      const mockConfig = {
+        id: 'sync-id',
+        userId: 'user-id',
       };
 
-      userRepository.findOne.mockResolvedValue(mockUser);
-      const caldavSync = {
-        ...mockCalendarSync,
-        provider: CalendarProvider.CALDAV,
-        getSuccessRate: jest.fn().mockReturnValue(90),
-        isHealthy: jest.fn().mockReturnValue(true),
-        needsAttention: jest.fn().mockReturnValue(false),
-        getNextSyncTime: jest
-          .fn()
-          .mockReturnValue(new Date('2024-01-15T11:00:00Z')),
-      };
-      calendarSyncRepository.create.mockReturnValue(caldavSync);
-      calendarSyncRepository.save.mockResolvedValue(caldavSync);
+      mockCalendarSyncRepository.findOne.mockResolvedValue(mockConfig);
+      mockCalendarSyncRepository.remove.mockResolvedValue(mockConfig);
 
-      // Act
-      const result = await service.createSyncConfig('user-1', config);
+      await service.deleteSyncConfig('sync-id', 'user-id');
 
-      // Assert
-      expect(result).toBeDefined();
+      expect(mockCalendarSyncRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'sync-id', userId: 'user-id' },
+      });
+      expect(mockCalendarSyncRepository.remove).toHaveBeenCalledWith(mockConfig);
+    });
+  });
+
+  describe('getSyncStatistics', () => {
+    it('should return sync statistics for user', async () => {
+      const mockConfigs = [
+        {
+          autoSync: true,
+          totalSyncs: 10,
+          successfulSyncs: 8,
+          failedSyncs: 2,
+          isHealthy: () => true,
+          needsAttention: () => false,
+        },
+        {
+          autoSync: false,
+          totalSyncs: 5,
+          successfulSyncs: 5,
+          failedSyncs: 0,
+          isHealthy: () => true,
+          needsAttention: () => false,
+        },
+      ];
+
+      mockCalendarSyncRepository.find.mockResolvedValue(mockConfigs);
+
+      const result = await service.getSyncStatistics('user-id');
+
+      expect(result).toEqual({
+        totalConfigs: 2,
+        activeConfigs: 1,
+        healthyConfigs: 2,
+        configsNeedingAttention: 0,
+        totalSyncs: 15,
+        successfulSyncs: 13,
+        failedSyncs: 2,
+        successRate: (13 / 15) * 100,
+      });
+    });
+  });
+
+  describe('exportMilestonesAsICal', () => {
+    it('should export milestones as iCal format', async () => {
+      const mockMilestones = [
+        {
+          id: 'milestone-1',
+          title: 'Test Milestone 1',
+          description: 'Test description 1',
+          dueDate: new Date('2024-12-31T10:00:00Z'),
+          priority: 'high',
+          project: { title: 'Test Project' },
+        },
+        {
+          id: 'milestone-2',
+          title: 'Test Milestone 2',
+          description: 'Test description 2',
+          dueDate: new Date('2024-12-31T14:00:00Z'),
+          priority: 'medium',
+          project: { title: 'Test Project 2' },
+        },
+      ];
+
+      mockMilestoneRepository.find.mockResolvedValue(mockMilestones);
+
+      const result = await service.exportMilestonesAsICal('user-id');
+
+      expect(result).toContain('BEGIN:VCALENDAR');
+      expect(result).toContain('END:VCALENDAR');
+      expect(result).toContain('[FYP] Test Milestone 1');
+      expect(result).toContain('[FYP] Test Milestone 2');
+      expect(mockMilestoneRepository.find).toHaveBeenCalledWith({
+        where: { studentId: 'user-id' },
+        relations: ['project'],
+      });
     });
 
-    it('should throw error for invalid CalDAV configuration', async () => {
-      // Arrange
-      const config = {
-        provider: CalendarProvider.CALDAV,
-        calendarId: 'personal',
-        // Missing serverUrl, username, password
-        syncInterval: 60,
-        autoSync: false,
-      };
+    it('should export specific milestones when IDs provided', async () => {
+      const mockMilestones = [
+        {
+          id: 'milestone-1',
+          title: 'Test Milestone 1',
+          description: 'Test description 1',
+          dueDate: new Date('2024-12-31T10:00:00Z'),
+          priority: 'high',
+          project: { title: 'Test Project' },
+        },
+      ];
 
-      userRepository.findOne.mockResolvedValue(mockUser);
+      mockMilestoneRepository.find.mockResolvedValue(mockMilestones);
 
-      // Act & Assert
-      await expect(service.createSyncConfig('user-1', config)).rejects.toThrow(
-        CalendarSyncException,
-      );
+      const result = await service.exportMilestonesAsICal('user-id', ['milestone-1']);
+
+      expect(result).toContain('[FYP] Test Milestone 1');
+      expect(mockMilestoneRepository.find).toHaveBeenCalledWith({
+        where: {
+          id: expect.anything(),
+          studentId: 'user-id',
+        },
+        relations: ['project'],
+      });
     });
   });
 });

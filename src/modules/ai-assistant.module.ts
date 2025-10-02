@@ -31,6 +31,7 @@ import { ContextService } from '../services/context.service';
 import { SupervisorAIMonitoringService } from '../services/supervisor-ai-monitoring.service';
 import { AdminKnowledgeManagementService } from '../services/admin-knowledge-management.service';
 import { HuggingFaceService } from '../services/hugging-face.service';
+import { OpenRouterService } from '../services/openrouter.service';
 import { QueryProcessingService } from '../services/query-processing.service';
 import { AIResponseValidatorService } from '../services/ai-response-validator.service';
 import { FallbackRecommendationService } from '../services/fallback-recommendation.service';
@@ -88,6 +89,7 @@ import { CommonModule } from '../common/common.module';
 
     // AI processing services
     HuggingFaceService,
+    OpenRouterService,
     QueryProcessingService,
     AIResponseValidatorService,
     FallbackRecommendationService,
@@ -117,6 +119,7 @@ import { CommonModule } from '../common/common.module';
     ContextService,
     SupervisorAIMonitoringService,
     HuggingFaceService,
+    OpenRouterService,
     ProjectContextIntegrationService,
     MilestoneGuidanceService,
   ],

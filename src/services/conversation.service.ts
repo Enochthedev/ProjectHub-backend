@@ -57,7 +57,7 @@ export class ConversationService {
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
     private readonly cacheService: ConversationCacheService,
-  ) {}
+  ) { }
 
   /**
    * Create a new conversation with optional initial message
@@ -320,6 +320,26 @@ export class ConversationService {
     }
 
     return conversation;
+  }
+
+  /**
+   * Delete a conversation and all its messages
+   */
+  async deleteConversation(conversationId: string): Promise<void> {
+    const conversation = await this.getConversationById(conversationId);
+
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    // Delete all messages first (cascade should handle this, but being explicit)
+    await this.messageRepository.delete({ conversationId });
+
+    // Delete the conversation
+    await this.conversationRepository.delete(conversationId);
+
+    // Invalidate cache
+    await this.cacheService.invalidateConversationCache(conversationId);
   }
 
   /**

@@ -9,6 +9,8 @@ import {
   Get,
   Query,
   Logger,
+  Patch,
+  Delete,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
@@ -28,6 +30,9 @@ import { RefreshTokenDto } from '../dto/auth/refresh-token.dto';
 import { VerifyEmailDto } from '../dto/auth/verify-email.dto';
 import { ForgotPasswordDto } from '../dto/auth/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/auth/reset-password.dto';
+import { UpdateProfileDto } from '../dto/auth/update-profile.dto';
+import { ChangePasswordDto } from '../dto/auth/change-password.dto';
+import { DeleteAccountDto } from '../dto/auth/delete-account.dto';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthThrottlerGuard } from '../common/guards/auth-throttler.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -53,7 +58,7 @@ import { User } from '../entities/user.entity';
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   /**
    * Register a new user account
@@ -701,6 +706,406 @@ export class AuthController {
     return {
       success: true,
       message: 'Verification email has been resent.',
+    };
+  }
+
+  /**
+   * Get current user profile
+   *
+   * @param req - Express request object for user context
+   * @returns User profile data
+   */
+  @ApiOperation({
+    summary: 'Get current user profile',
+    description: 'Retrieves the authenticated user\'s profile information.',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiResponse({
+    status: 200,
+    description: 'Profile retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            email: { type: 'string', format: 'email' },
+            role: { type: 'string', enum: ['student', 'supervisor', 'admin'] },
+            isEmailVerified: { type: 'boolean' },
+            isActive: { type: 'boolean' },
+            profile: { type: 'object' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
+  })
+  @UseGuards(JwtAuthGuard)
+  @Get('profile')
+  async getProfile(@Req() req: Request): Promise<{
+    success: boolean;
+    data: Omit<User, 'password'>;
+  }> {
+    const user = req.user as any;
+    this.logger.log(`Profile request for user: ${user.email}`);
+
+    const profile = await this.authService.getProfile(user.id);
+
+    return {
+      success: true,
+      data: profile,
+    };
+  }
+
+  /**
+   * Update user profile
+   *
+   * @param body - Profile update data
+   * @param req - Express request object for user context
+   * @returns Updated user profile
+   */
+  @ApiOperation({
+    summary: 'Update user profile',
+    description: 'Updates the authenticated user\'s profile information.',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody({
+    description: 'Profile update data',
+    schema: {
+      type: 'object',
+      properties: {
+        firstName: { type: 'string' },
+        lastName: { type: 'string' },
+        name: { type: 'string' },
+        specialization: { type: 'string' },
+        specializations: { type: 'array', items: { type: 'string' } },
+        interests: { type: 'array', items: { type: 'string' } },
+        skills: { type: 'array', items: { type: 'string' } },
+        year: { type: 'number' },
+        capacity: { type: 'number' },
+        isAvailable: { type: 'boolean' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile updated successfully',
+  })
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile')
+  async updateProfile(
+    @Body() body: UpdateProfileDto,
+    @Req() req: Request,
+  ): Promise<{
+    success: boolean;
+    data: Omit<User, 'password'>;
+  }> {
+    const user = req.user as any;
+    this.logger.log(`Profile update for user: ${user.email}`);
+
+    const updatedProfile = await this.authService.updateProfile(user.id, body);
+
+    return {
+      success: true,
+      data: updatedProfile,
+    };
+  }
+
+  /**
+   * Change user password
+   *
+   * @param body - Password change data
+   * @param req - Express request object for user context
+   * @returns Success message
+   */
+  @ApiOperation({
+    summary: 'Change user password',
+    description: 'Changes the authenticated user\'s password.',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody({
+    description: 'Password change data',
+    schema: {
+      type: 'object',
+      properties: {
+        currentPassword: { type: 'string' },
+        newPassword: { type: 'string', minLength: 8 },
+        confirmPassword: { type: 'string' },
+      },
+      required: ['currentPassword', 'newPassword', 'confirmPassword'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Password changed successfully',
+  })
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  async changePassword(
+    @Body() body: ChangePasswordDto,
+    @Req() req: Request,
+  ): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    const user = req.user as any;
+    this.logger.log(`Password change request for user: ${user.email}`);
+
+    await this.authService.changePassword(user.id, body.currentPassword, body.newPassword);
+
+    return {
+      success: true,
+      message: 'Password changed successfully',
+    };
+  }
+
+  /**
+   * Delete user account
+   *
+   * @param body - Account deletion confirmation
+   * @param req - Express request object for user context
+   * @returns Success message
+   */
+  @ApiOperation({
+    summary: 'Delete user account',
+    description: 'Permanently deletes the authenticated user\'s account.',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody({
+    description: 'Account deletion confirmation',
+    schema: {
+      type: 'object',
+      properties: {
+        password: { type: 'string' },
+      },
+      required: ['password'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Account deleted successfully',
+  })
+  @UseGuards(JwtAuthGuard)
+  @Delete('account')
+  async deleteAccount(
+    @Body() body: DeleteAccountDto,
+    @Req() req: Request,
+  ): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    const user = req.user as any;
+    this.logger.log(`Account deletion request for user: ${user.email}`);
+
+    await this.authService.deleteAccount(user.id, body.password);
+
+    return {
+      success: true,
+      message: 'Account deleted successfully',
+    };
+  }
+
+  /**
+   * Export user data
+   *
+   * @param req - Express request object for user context
+   * @returns Download URL for user data
+   */
+  @ApiOperation({
+    summary: 'Export user data',
+    description: 'Generates a download link for all user data.',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiResponse({
+    status: 200,
+    description: 'Data export link generated',
+  })
+  @UseGuards(JwtAuthGuard)
+  @Post('export-data')
+  async exportData(@Req() req: Request): Promise<{
+    success: boolean;
+    data: {
+      downloadUrl: string;
+      expiresAt: string;
+    };
+  }> {
+    const user = req.user as any;
+    this.logger.log(`Data export request for user: ${user.email}`);
+
+    const exportData = await this.authService.exportUserData(user.id);
+
+    return {
+      success: true,
+      data: exportData,
+    };
+  }
+
+  /**
+   * Get user settings
+   *
+   * @param req - Express request object for user context
+   * @returns User settings
+   */
+  @ApiOperation({
+    summary: 'Get user settings',
+    description: 'Retrieves the authenticated user\'s settings.',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiResponse({
+    status: 200,
+    description: 'Settings retrieved successfully',
+  })
+  @UseGuards(JwtAuthGuard)
+  @Get('settings')
+  async getSettings(@Req() req: Request): Promise<{
+    success: boolean;
+    data: any;
+  }> {
+    const user = req.user as any;
+    this.logger.log(`Settings request for user: ${user.email}`);
+
+    const settings = await this.authService.getUserSettings(user.id);
+
+    return {
+      success: true,
+      data: settings,
+    };
+  }
+
+  /**
+   * Update notification preferences
+   *
+   * @param body - Notification preferences
+   * @param req - Express request object for user context
+   * @returns Updated settings
+   */
+  @ApiOperation({
+    summary: 'Update notification preferences',
+    description: 'Updates the user\'s notification preferences.',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody({
+    description: 'Notification preferences',
+    schema: {
+      type: 'object',
+      properties: {
+        emailNotifications: { type: 'boolean' },
+        milestoneReminders: { type: 'boolean' },
+        projectUpdates: { type: 'boolean' },
+        aiAssistantUpdates: { type: 'boolean' },
+        weeklyDigest: { type: 'boolean' },
+        marketingEmails: { type: 'boolean' },
+      },
+    },
+  })
+  @UseGuards(JwtAuthGuard)
+  @Patch('settings/notifications')
+  async updateNotificationPreferences(
+    @Body() body: any,
+    @Req() req: Request,
+  ): Promise<{
+    success: boolean;
+    data: any;
+  }> {
+    const user = req.user as any;
+    this.logger.log(`Notification preferences update for user: ${user.email}`);
+
+    const settings = await this.authService.updateNotificationPreferences(user.id, body);
+
+    return {
+      success: true,
+      data: settings,
+    };
+  }
+
+  /**
+   * Update privacy settings
+   *
+   * @param body - Privacy settings
+   * @param req - Express request object for user context
+   * @returns Updated settings
+   */
+  @ApiOperation({
+    summary: 'Update privacy settings',
+    description: 'Updates the user\'s privacy settings.',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody({
+    description: 'Privacy settings',
+    schema: {
+      type: 'object',
+      properties: {
+        profileVisibility: { type: 'string', enum: ['public', 'private', 'contacts'] },
+        showEmail: { type: 'boolean' },
+        showProjects: { type: 'boolean' },
+        allowDirectMessages: { type: 'boolean' },
+        dataProcessingConsent: { type: 'boolean' },
+      },
+    },
+  })
+  @UseGuards(JwtAuthGuard)
+  @Patch('settings/privacy')
+  async updatePrivacySettings(
+    @Body() body: any,
+    @Req() req: Request,
+  ): Promise<{
+    success: boolean;
+    data: any;
+  }> {
+    const user = req.user as any;
+    this.logger.log(`Privacy settings update for user: ${user.email}`);
+
+    const settings = await this.authService.updatePrivacySettings(user.id, body);
+
+    return {
+      success: true,
+      data: settings,
+    };
+  }
+
+  /**
+   * Update general settings
+   *
+   * @param body - General settings
+   * @param req - Express request object for user context
+   * @returns Updated settings
+   */
+  @ApiOperation({
+    summary: 'Update general settings',
+    description: 'Updates the user\'s general settings.',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiBody({
+    description: 'General settings',
+    schema: {
+      type: 'object',
+      properties: {
+        language: { type: 'string' },
+        timezone: { type: 'string' },
+        theme: { type: 'string', enum: ['light', 'dark', 'system'] },
+      },
+    },
+  })
+  @UseGuards(JwtAuthGuard)
+  @Patch('settings/general')
+  async updateGeneralSettings(
+    @Body() body: any,
+    @Req() req: Request,
+  ): Promise<{
+    success: boolean;
+    data: any;
+  }> {
+    const user = req.user as any;
+    this.logger.log(`General settings update for user: ${user.email}`);
+
+    const settings = await this.authService.updateGeneralSettings(user.id, body);
+
+    return {
+      success: true,
+      data: settings,
     };
   }
 
