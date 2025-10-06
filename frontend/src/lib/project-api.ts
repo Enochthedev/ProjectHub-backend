@@ -62,7 +62,7 @@ export const projectApi = {
 
     // Get supervisor's projects
     getSupervisorProjects: async (): Promise<Project[]> => {
-        return api.get<Project[]>('/projects/supervisor/my-projects');
+        return api.get<Project[]>('/projects/my-projects');
     },
 
     // Increment view count

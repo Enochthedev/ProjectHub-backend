@@ -128,7 +128,7 @@ export const BookmarkGrid: React.FC<BookmarkGridProps> = ({ className = '' }) =>
                     {safeFilteredBookmarks.length === 0 ? (
                         <EmptyBookmarksState 
                             hasFilters={hasActiveFilters}
-                            onBrowseProjects={() => window.location.href = '/dashboard/student'}
+                            onBrowseProjects={() => window.location.href = '/projects'}
                             onClearFilters={() => {
                                 const { clearFilters } = useBookmarkStore.getState();
                                 clearFilters();

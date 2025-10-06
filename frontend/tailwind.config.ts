@@ -1,6 +1,6 @@
 import type { Config } from 'tailwindcss';
 
-export default {
+const config: Config = {
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -60,10 +60,21 @@ export default {
         '10': '2.5rem', // 40px
         '12': '3rem', // 48px
         '16': '4rem', // 64px
-        // Touch-friendly spacing
-        'touch': '44px', // Minimum touch target size
-        'touch-sm': '36px',
-        'touch-lg': '48px',
+      },
+      height: {
+        'touch': '2.75rem', // 44px - Minimum touch target size
+        'touch-sm': '2.25rem', // 36px
+        'touch-lg': '3rem', // 48px
+      },
+      minHeight: {
+        'touch': '2.75rem', // 44px - Minimum touch target size
+        'touch-sm': '2.25rem', // 36px
+        'touch-lg': '3rem', // 48px
+      },
+      minWidth: {
+        'touch': '2.75rem', // 44px - Minimum touch target size
+        'touch-sm': '2.25rem', // 36px
+        'touch-lg': '3rem', // 48px
       },
       borderRadius: {
         none: '0px',
@@ -122,4 +133,6 @@ export default {
     },
   },
   plugins: [],
-} satisfies Config;
+};
+
+export default config;

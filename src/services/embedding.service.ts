@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HuggingFaceService } from './hugging-face.service';
+import { LocalEmbeddingService } from './local-embedding.service';
 import { RecommendationCacheService } from './recommendation-cache.service';
 import { createHash } from 'crypto';
 
@@ -26,8 +27,9 @@ export class EmbeddingService {
 
   constructor(
     private readonly huggingFaceService: HuggingFaceService,
+    private readonly localEmbeddingService: LocalEmbeddingService,
     private readonly cacheService: RecommendationCacheService,
-  ) {}
+  ) { }
 
   /**
    * Generate embeddings for texts with caching support
@@ -136,6 +138,7 @@ export class EmbeddingService {
 
   /**
    * Generate embeddings for multiple texts (bypasses cache)
+   * Uses local embedding service if available, falls back to HuggingFace API
    */
   private async generateBatchEmbeddings(
     texts: string[],
@@ -145,6 +148,22 @@ export class EmbeddingService {
       return [];
     }
 
+    // Try local embedding service first (cost-effective)
+    if (this.localEmbeddingService.isAvailable()) {
+      try {
+        this.logger.debug(`Using local embedding service for ${texts.length} texts`);
+        const embeddings = await this.localEmbeddingService.generateEmbeddings(texts);
+        return embeddings;
+      } catch (error) {
+        this.logger.warn(
+          `Local embedding service failed, falling back to HuggingFace API: ${error.message}`,
+        );
+        // Fall through to HuggingFace API
+      }
+    }
+
+    // Fallback to HuggingFace API
+    this.logger.debug(`Using HuggingFace API for ${texts.length} texts`);
     const embeddings = await this.huggingFaceService.generateEmbeddings(
       texts,
       userId,

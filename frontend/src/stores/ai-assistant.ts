@@ -340,7 +340,14 @@ export const useAIAssistantStore = create<AIAssistantState>()(
             selectConversation: async (id: string) => {
                 try {
                     console.log('📋 Selecting conversation:', id);
-                    set({ isLoadingMessages: true, error: null });
+
+                    const currentState = get();
+
+                    // If selecting the same conversation and we have messages, don't reload
+                    if (currentState.activeConversation?.id === id && currentState.messages.length > 0) {
+                        console.log('📋 Already viewing this conversation with', currentState.messages.length, 'messages');
+                        return;
+                    }
 
                     const conversation = (get().conversations || []).find(c => c.id === id);
                     if (!conversation) {
@@ -349,33 +356,35 @@ export const useAIAssistantStore = create<AIAssistantState>()(
 
                     console.log('📋 Found conversation:', conversation.title);
 
-                    // Check if we already have messages for this conversation in persisted state
-                    const currentState = get();
-                    const hasPersistedMessages = currentState.activeConversation?.id === id &&
-                        currentState.messages.length > 0 &&
-                        currentState.messages.some(m => m.conversationId === id);
-
-                    if (hasPersistedMessages) {
-                        console.log('📋 Using persisted messages:', currentState.messages.length);
+                    // If switching to a different conversation, clear old messages
+                    if (currentState.activeConversation?.id !== id) {
                         set({
+                            messages: [],
                             activeConversation: conversation,
-                            isLoadingMessages: false,
+                            isLoadingMessages: true,
+                            error: null,
                         });
                     } else {
-                        console.log('📋 Loading messages from API');
-                        // Get messages for the conversation
-                        await get().getMessages(id);
-
+                        // Same conversation but no messages, just set loading state
                         set({
                             activeConversation: conversation,
-                            isLoadingMessages: false,
+                            isLoadingMessages: true,
+                            error: null,
                         });
                     }
+
+                    console.log('📋 Loading messages from API');
+                    // Get messages for the conversation
+                    await get().getMessages(id);
+
+                    set({
+                        isLoadingMessages: false,
+                    });
 
                     console.log('📋 Conversation selected, messages loaded:', get().messages.length);
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : 'Failed to select conversation';
-                    set({ error: errorMessage, isLoadingMessages: false });
+                    set({ error: errorMessage, isLoadingMessages: false, messages: [] });
                     throw error;
                 }
             },

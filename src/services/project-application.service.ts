@@ -10,7 +10,8 @@ import { Repository, Not, MoreThan } from 'typeorm';
 import { ProjectApplication, ApplicationStatus } from '../entities/project-application.entity';
 import { Project } from '../entities/project.entity';
 import { User } from '../entities/user.entity';
-import { UserActivityService, ActivityType } from './user-activity.service';
+import { UserActivityService } from './user-activity.service';
+import { ActivityType } from '../entities/user-activity.entity';
 import {
     CreateProjectApplicationDto,
     UpdateApplicationStatusDto,
@@ -100,12 +101,16 @@ export class ProjectApplicationService {
             `Student ${studentId} applied to project ${createDto.projectId}`,
         );
 
-        return this.mapToDto(
-            await this.applicationRepository.findOne({
-                where: { id: savedApplication.id },
-                relations: ['project', 'project.supervisor', 'student', 'student.studentProfile'],
-            }),
-        );
+        const createdApplication = await this.applicationRepository.findOne({
+            where: { id: savedApplication.id },
+            relations: ['project', 'project.supervisor', 'student', 'student.studentProfile'],
+        });
+
+        if (!createdApplication) {
+            throw new NotFoundException('Application not found after creation');
+        }
+
+        return this.mapToDto(createdApplication);
     }
 
     /**

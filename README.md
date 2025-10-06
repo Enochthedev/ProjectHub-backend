@@ -2,6 +2,26 @@
 
 A comprehensive platform for managing final year projects with AI-powered guidance, real-time collaboration, and intelligent project recommendations.
 
+## ⚡ Quick Start
+
+**Get started in 5 minutes:**
+
+```bash
+chmod +x setup.sh && ./setup.sh
+```
+
+Then start all services:
+
+```bash
+./start.sh
+```
+
+Access at: http://localhost:3000
+
+📖 **New to ProjectHub?** See [QUICKSTART.md](./QUICKSTART.md) for the fastest way to get running!
+
+📚 **Need detailed setup?** Check [SETUP_GUIDE.md](./SETUP_GUIDE.md) for comprehensive instructions.
+
 ## 🚀 Features
 
 - **User Management**: Multi-role authentication (Students, Supervisors, Admins)

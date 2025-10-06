@@ -12,7 +12,9 @@ import { ProjectBookmark } from '../entities/project-bookmark.entity';
 import { ProjectApplication, ApplicationStatus } from '../entities/project-application.entity';
 import { UserActivity, ActivityType } from '../entities/user-activity.entity';
 import { Recommendation } from '../entities/recommendation.entity';
+import { RecommendationStatus } from '../common/enums/recommendation-status.enum';
 import { MilestoneStatus } from '../common/enums/milestone-status.enum';
+import { UserRole } from '../common/enums/user-role.enum';
 import {
     StudentDashboardDto,
     CurrentProjectDto,
@@ -50,7 +52,7 @@ export class StudentDashboardService {
         this.logger.log(`Getting dashboard data for student ${studentId}`);
 
         const student = await this.userRepository.findOne({
-            where: { id: studentId, role: 'student' },
+            where: { id: studentId, role: UserRole.STUDENT },
             relations: ['studentProfile'],
         });
 
@@ -76,9 +78,7 @@ export class StudentDashboardService {
 
         return {
             studentId,
-            studentName: student.studentProfile?.firstName && student.studentProfile?.lastName
-                ? `${student.studentProfile.firstName} ${student.studentProfile.lastName}`
-                : student.email,
+            studentName: student.studentProfile?.name || student.email,
             currentProject,
             recentActivities,
             bookmarkedProjects,
@@ -171,7 +171,7 @@ export class StudentDashboardService {
      */
     async getBookmarkedProjects(studentId: string, limit: number = 5): Promise<BookmarkedProjectDto[]> {
         const bookmarks = await this.bookmarkRepository.find({
-            where: { userId: studentId },
+            where: { studentId },
             relations: ['project', 'project.supervisor', 'project.supervisor.supervisorProfile'],
             order: { createdAt: 'DESC' },
             take: limit,
@@ -233,21 +233,23 @@ export class StudentDashboardService {
     async getRecommendations(studentId: string, limit: number = 5): Promise<RecommendationDto[]> {
         const recommendations = await this.recommendationRepository.find({
             where: {
-                userId: studentId,
-                type: 'project',
+                studentId,
+                status: RecommendationStatus.ACTIVE,
             },
-            order: { confidenceScore: 'DESC', createdAt: 'DESC' },
+            order: { averageSimilarityScore: 'DESC', createdAt: 'DESC' },
             take: limit,
         });
 
-        return recommendations.map(rec => ({
-            id: rec.id,
-            type: rec.type,
-            projectId: rec.targetItemId,
-            title: rec.title,
-            reason: rec.reasoning,
-            confidenceScore: rec.confidenceScore,
-        }));
+        return recommendations.flatMap(rec =>
+            rec.projectSuggestions.slice(0, limit).map(proj => ({
+                id: rec.id,
+                type: 'project',
+                projectId: proj.projectId,
+                title: proj.title,
+                reason: proj.reasoning,
+                confidenceScore: proj.similarityScore,
+            }))
+        ).slice(0, limit);
     }
 
     /**
@@ -263,7 +265,7 @@ export class StudentDashboardService {
             totalBookmarks,
             project,
         ] = await Promise.all([
-            this.bookmarkRepository.count({ where: { userId: studentId } }),
+            this.bookmarkRepository.count({ where: { studentId } }),
             this.projectRepository.findOne({ where: { studentId } }),
         ]);
 
@@ -338,8 +340,7 @@ export class StudentDashboardService {
                 dueDate: milestone.dueDate ? milestone.dueDate.toISOString().split('T')[0] : '',
                 priority: milestone.priority,
                 status: milestone.status,
-                progress: milestone.progress || 0,
-                tags: milestone.tags || [],
+                progress: milestone.getProgressPercentage(),
                 isOverdue: milestone.status !== MilestoneStatus.COMPLETED &&
                     milestone.dueDate && new Date(milestone.dueDate) < now,
                 daysUntilDue: milestone.dueDate ? Math.ceil((new Date(milestone.dueDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0,

@@ -120,19 +120,19 @@ export default function SupervisorProjectsPage() {
 
   // Action handlers
   const handleViewProject = (project: Project) => {
-    router.push(`/dashboard/projects/${project.id}`);
+    router.push(`/projects/${project.id}`);
   };
 
   const handleEditProject = (project: Project) => {
-    router.push(`/dashboard/projects/${project.id}/edit`);
+    router.push(`/projects/${project.id}/edit`);
   };
 
   const handleViewStudents = (project: Project) => {
-    router.push(`/dashboard/supervisor/students?project=${project.id}`);
+    router.push(`/supervisor/students?project=${project.id}`);
   };
 
   const handleViewAnalytics = (project: Project) => {
-    router.push(`/dashboard/supervisor/analytics?project=${project.id}`);
+    router.push(`/supervisor/analytics?project=${project.id}`);
   };
 
   const handleScoreProject = (project: Project) => {

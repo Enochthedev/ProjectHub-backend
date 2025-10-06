@@ -22,6 +22,7 @@ import {
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { UserRole } from '../common/enums/user-role.enum';
 import { DashboardService } from '../services/dashboard.service';
 import { StudentDashboardService } from '../services/student-dashboard.service';
 import { SupervisorDashboardService } from '../services/supervisor-dashboard.service';
@@ -56,7 +57,7 @@ export class DashboardController {
   // Student Dashboard Endpoints
 
   @Get('student')
-  @Roles('student')
+  @Roles(UserRole.STUDENT)
   @ApiOperation({
     summary: 'Get student dashboard data',
     description: 'Retrieve personalized dashboard data for the authenticated student.',
@@ -74,7 +75,7 @@ export class DashboardController {
   // Supervisor Dashboard Endpoints
 
   @Get('supervisor')
-  @Roles('supervisor')
+  @Roles(UserRole.SUPERVISOR)
   @ApiOperation({
     summary: 'Get supervisor dashboard data',
     description: 'Retrieve comprehensive dashboard data for the authenticated supervisor.',
@@ -92,7 +93,7 @@ export class DashboardController {
   // Admin Dashboard Endpoints
 
   @Get('admin')
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Get admin dashboard data',
     description: 'Retrieve comprehensive platform analytics and system management data.',
@@ -110,7 +111,7 @@ export class DashboardController {
   // Project Application Endpoints
 
   @Post('applications')
-  @Roles('student')
+  @Roles(UserRole.STUDENT)
   @ApiOperation({
     summary: 'Create project application',
     description: 'Submit an application for a specific project.',
@@ -134,7 +135,7 @@ export class DashboardController {
   }
 
   @Get('applications/student')
-  @Roles('student')
+  @Roles(UserRole.STUDENT)
   @ApiOperation({
     summary: 'Get student applications',
     description: 'Retrieve all applications submitted by the authenticated student.',
@@ -150,7 +151,7 @@ export class DashboardController {
   }
 
   @Put('applications/:applicationId/status')
-  @Roles('supervisor', 'admin')
+  @Roles(UserRole.SUPERVISOR, UserRole.ADMIN)
   @ApiOperation({
     summary: 'Update application status',
     description: 'Update the status of a project application.',
@@ -183,7 +184,7 @@ export class DashboardController {
   // User Activity Endpoints
 
   @Get('activities/recent')
-  @Roles('student', 'supervisor', 'admin')
+  @Roles(UserRole.STUDENT, UserRole.SUPERVISOR, UserRole.ADMIN)
   @ApiOperation({
     summary: 'Get recent user activities',
     description: 'Retrieve recent activities for the authenticated user.',
@@ -210,7 +211,7 @@ export class DashboardController {
   // Milestone Progress Tracking Endpoints
 
   @Get('milestones/progress/:projectId')
-  @Roles('student', 'supervisor', 'admin')
+  @Roles(UserRole.STUDENT, UserRole.SUPERVISOR, UserRole.ADMIN)
   @ApiOperation({
     summary: 'Get milestone progress for project',
     description: 'Retrieve milestone progress tracking data for a specific project.',

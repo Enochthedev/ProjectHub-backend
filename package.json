@@ -6,11 +6,11 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build",
+    "build": "node --max-old-space-size=4096 ./node_modules/.bin/nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
-    "start:dev": "nest start --watch",
-    "start:debug": "nest start --debug --watch",
+    "start:dev": "node --max-old-space-size=4096 ./node_modules/.bin/nest start --watch",
+    "start:debug": "node --max-old-space-size=4096 ./node_modules/.bin/nest start --debug --watch",
     "start:prod": "node --max-old-space-size=400 dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
@@ -63,7 +63,9 @@
     "benchmark:recommendations:performance": "npm run benchmark:recommendations -- --performance-only",
     "benchmark:recommendations:load": "npm run benchmark:recommendations -- --load-test",
     "benchmark:recommendations:ab": "npm run benchmark:recommendations -- --ab-test",
-    "benchmark:recommendations:full": "npm run benchmark:recommendations -- --load-test --ab-test"
+    "benchmark:recommendations:full": "npm run benchmark:recommendations -- --load-test --ab-test",
+    "test:vector-setup": "ts-node -r tsconfig-paths/register scripts/test-vector-setup.ts",
+    "test:vector-minimal": "ts-node -r tsconfig-paths/register scripts/test-vector-minimal.ts"
   },
   "dependencies": {
     "@huggingface/inference": "^4.8.0",
@@ -83,6 +85,7 @@
     "@nestjs/throttler": "^6.4.0",
     "@nestjs/typeorm": "^11.0.0",
     "@nestjs/websockets": "^11.1.6",
+    "@qdrant/js-client-rest": "^1.15.1",
     "@types/helmet": "^0.0.48",
     "bcrypt": "^6.0.0",
     "cache-manager": "^7.2.0",
@@ -106,7 +109,8 @@
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.1",
     "swagger-ui-express": "^5.0.1",
-    "typeorm": "^0.3.26"
+    "typeorm": "^0.3.26",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -123,6 +127,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/passport-local": "^1.0.38",
     "@types/supertest": "^6.0.2",
+    "@types/uuid": "^10.0.0",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",

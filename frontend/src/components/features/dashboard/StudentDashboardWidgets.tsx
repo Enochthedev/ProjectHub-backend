@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Progress from '@/components/ui/Progress';
@@ -42,6 +43,7 @@ const StudentDashboardWidgets: React.FC<StudentDashboardWidgetsProps> = ({
   onWidgetRemove,
   onWidgetResize
 }) => {
+  const router = useRouter();
   const widgets: WidgetType[] = [
     {
       id: 'current-project',
@@ -134,11 +136,11 @@ const StudentDashboardWidgets: React.FC<StudentDashboardWidgetsProps> = ({
           </div>
           
           <div className="flex space-x-2">
-            <Button size="sm">
+            <Button size="sm" onClick={() => router.push('/current-project')}>
               <BookOpen className="w-4 h-4 mr-2" />
               Continue Work
             </Button>
-            <Button size="sm" variant="secondary">
+            <Button size="sm" variant="secondary" onClick={() => router.push('/ai-assistant')}>
               Ask AI Assistant
             </Button>
           </div>
@@ -148,7 +150,7 @@ const StudentDashboardWidgets: React.FC<StudentDashboardWidgetsProps> = ({
           <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <h4 className="font-medium text-black mb-2">No Current Project</h4>
           <p className="text-sm text-gray-600 mb-4">You haven't been assigned to a project yet.</p>
-          <Button size="sm">Browse Projects</Button>
+          <Button size="sm" onClick={() => router.push('/projects')}>Browse Projects</Button>
         </div>
       )}
     </DashboardWidget>

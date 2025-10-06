@@ -18,6 +18,7 @@ import { ProjectBookmark } from '../entities/project-bookmark.entity';
 import { RecommendationService } from '../services/recommendation.service';
 import { FallbackRecommendationService } from '../services/fallback-recommendation.service';
 import { HuggingFaceService } from '../services/hugging-face.service';
+import { LocalEmbeddingService } from '../services/local-embedding.service';
 import { EmbeddingService } from '../services/embedding.service';
 import { SimilarityService } from '../services/similarity.service';
 import { TextProcessingService } from '../services/text-processing.service';
@@ -58,6 +59,7 @@ import { RecommendationController } from '../controllers/recommendation.controll
     RecommendationService,
     FallbackRecommendationService,
     HuggingFaceService,
+    LocalEmbeddingService,
     EmbeddingService,
     SimilarityService,
     TextProcessingService,
@@ -75,6 +77,7 @@ import { RecommendationController } from '../controllers/recommendation.controll
     RecommendationService,
     FallbackRecommendationService,
     HuggingFaceService,
+    LocalEmbeddingService,
     EmbeddingService,
     SimilarityService,
     RecommendationCacheService,
@@ -86,4 +89,4 @@ import { RecommendationController } from '../controllers/recommendation.controll
     ProgressiveLoadingService,
   ],
 })
-export class RecommendationModule {}
+export class RecommendationModule { }

@@ -13,6 +13,8 @@ import { UserActivity, ActivityType } from '../entities/user-activity.entity';
 import { Conversation } from '../entities/conversation.entity';
 import { ConversationMessage } from '../entities/conversation-message.entity';
 import { MilestoneStatus } from '../common/enums/milestone-status.enum';
+import { UserRole } from '../common/enums/user-role.enum';
+import { ApprovalStatus, MessageType } from '../common/enums';
 import {
     SupervisorDashboardDto,
     SupervisorMetricsDto,
@@ -50,7 +52,7 @@ export class SupervisorDashboardService {
         this.logger.log(`Getting dashboard data for supervisor ${supervisorId}`);
 
         const supervisor = await this.userRepository.findOne({
-            where: { id: supervisorId, role: 'supervisor' },
+            where: { id: supervisorId, role: UserRole.SUPERVISOR },
             relations: ['supervisorProfile'],
         });
 
@@ -117,18 +119,13 @@ export class SupervisorDashboardService {
                 relations: ['project'],
             }),
             this.conversationRepository.find({
-                where: {
-                    student: {
-                        projects: { supervisorId }
-                    }
-                },
                 relations: ['student'],
             }),
         ]);
 
         const activeProjects = projects.filter(p => p.student).length;
         const completedProjectsThisYear = projects.filter(p =>
-            p.status === 'completed' &&
+            p.approvalStatus === ApprovalStatus.APPROVED &&
             p.updatedAt >= yearStart &&
             p.updatedAt <= yearEnd
         ).length;
@@ -190,20 +187,18 @@ export class SupervisorDashboardService {
                 : 0;
 
             // Get last activity
-            const lastActivity = await this.activityRepository.findOne({
+            const lastActivity = project.studentId ? await this.activityRepository.findOne({
                 where: { userId: project.studentId },
                 order: { createdAt: 'DESC' },
-            });
+            }) : null;
 
             // Calculate risk level
             const riskLevel = this.calculateRiskLevel(progressPercentage, overdueMilestones, milestones.length);
 
             return {
-                id: project.student.id,
-                name: project.student.studentProfile?.firstName && project.student.studentProfile?.lastName
-                    ? `${project.student.studentProfile.firstName} ${project.student.studentProfile.lastName}`
-                    : project.student.email,
-                email: project.student.email,
+                id: project.student!.id,
+                name: project.student!.studentProfile?.name || project.student!.email,
+                email: project.student!.email,
                 currentProject: {
                     id: project.id,
                     title: project.title,
@@ -264,9 +259,7 @@ export class SupervisorDashboardService {
                 title: project.title,
                 assignedStudent: project.student ? {
                     id: project.student.id,
-                    name: project.student.studentProfile?.firstName && project.student.studentProfile?.lastName
-                        ? `${project.student.studentProfile.firstName} ${project.student.studentProfile.lastName}`
-                        : project.student.email,
+                    name: project.student.studentProfile?.name || project.student.email,
                 } : null,
                 progressPercentage,
                 pendingApplications: applications,
@@ -306,10 +299,8 @@ export class SupervisorDashboardService {
             return {
                 id: milestone.id,
                 title: milestone.title,
-                studentName: milestone.project.student?.studentProfile?.firstName && milestone.project.student?.studentProfile?.lastName
-                    ? `${milestone.project.student.studentProfile.firstName} ${milestone.project.student.studentProfile.lastName}`
-                    : milestone.project.student?.email || 'Unassigned',
-                projectTitle: milestone.project.title,
+                studentName: milestone.project?.student?.studentProfile?.name || milestone.project?.student?.email || 'Unassigned',
+                projectTitle: milestone.project?.title || 'Unknown',
                 dueDate: milestone.dueDate.toISOString().split('T')[0],
                 daysUntilDue,
                 priority: milestone.priority,
@@ -322,12 +313,31 @@ export class SupervisorDashboardService {
      * Get AI interaction summary for supervised students
      */
     async getAIInteractionSummary(supervisorId: string): Promise<AIInteractionSummaryDto> {
-        // Get all conversations for students supervised by this supervisor
+        // Get all student IDs for this supervisor's projects
+        const projects = await this.projectRepository.find({
+            where: { supervisorId },
+            select: ['studentId'],
+        });
+
+        const studentIds = projects
+            .map(p => p.studentId)
+            .filter((id): id is string => id !== null);
+
+        if (studentIds.length === 0) {
+            return {
+                totalConversations: 0,
+                conversationsNeedingReview: 0,
+                averageConfidenceScore: 0,
+                commonCategories: [],
+                recentEscalations: [],
+            };
+        }
+
+        // Get all conversations for these students
         const conversations = await this.conversationRepository
             .createQueryBuilder('conversation')
             .leftJoinAndSelect('conversation.student', 'student')
-            .leftJoin('student.projects', 'project')
-            .where('project.supervisorId = :supervisorId', { supervisorId })
+            .where('conversation.studentId IN (:...studentIds)', { studentIds })
             .getMany();
 
         const conversationIds = conversations.map(c => c.id);
@@ -343,10 +353,7 @@ export class SupervisorDashboardService {
         }
 
         const messages = await this.messageRepository.find({
-            where: {
-                conversationId: conversationIds.length > 0 ? conversationIds : ['none'],
-                type: 'assistant',
-            },
+            where: conversationIds.length > 0 ? conversationIds.map(id => ({ conversationId: id, type: MessageType.AI_RESPONSE })) : [],
             relations: ['conversation', 'conversation.student', 'conversation.student.studentProfile'],
         });
 
@@ -356,7 +363,7 @@ export class SupervisorDashboardService {
 
         const confidenceScores = messages
             .filter(m => m.confidenceScore !== null)
-            .map(m => m.confidenceScore);
+            .map(m => m.confidenceScore as number);
 
         const averageConfidenceScore = confidenceScores.length > 0
             ? Math.round(confidenceScores.reduce((sum, score) => sum + score, 0) / confidenceScores.length * 10) / 10
@@ -377,9 +384,7 @@ export class SupervisorDashboardService {
             .slice(0, 5)
             .map(conversation => ({
                 id: conversation.id,
-                studentName: conversation.student?.studentProfile?.firstName && conversation.student?.studentProfile?.lastName
-                    ? `${conversation.student.studentProfile.firstName} ${conversation.student.studentProfile.lastName}`
-                    : conversation.student?.email || 'Unknown',
+                studentName: conversation.student?.studentProfile?.name || conversation.student?.email || 'Unknown',
                 topic: conversation.title || 'General Discussion',
                 timestamp: conversation.updatedAt.toISOString(),
             }));
@@ -412,7 +417,7 @@ export class SupervisorDashboardService {
         }
 
         const activities = await this.activityRepository.find({
-            where: { userId: studentIds.length > 0 ? studentIds : ['none'] },
+            where: studentIds.filter(id => id !== null).map(id => ({ userId: id as string })),
             relations: ['user', 'user.studentProfile'],
             order: { createdAt: 'DESC' },
             take: limit,
@@ -420,9 +425,7 @@ export class SupervisorDashboardService {
 
         return activities.map(activity => ({
             id: activity.id,
-            studentName: activity.user?.studentProfile?.firstName && activity.user?.studentProfile?.lastName
-                ? `${activity.user.studentProfile.firstName} ${activity.user.studentProfile.lastName}`
-                : activity.user?.email || 'Unknown',
+            studentName: activity.user?.studentProfile?.name || activity.user?.email || 'Unknown',
             type: activity.activityType,
             description: activity.description,
             timestamp: activity.createdAt.toISOString(),
@@ -464,8 +467,7 @@ export class SupervisorDashboardService {
                 dueDate: milestone.dueDate.toISOString().split('T')[0],
                 priority: milestone.priority,
                 status: milestone.status,
-                progress: milestone.progress || 0,
-                tags: milestone.tags || [],
+                progress: milestone.getProgressPercentage(),
                 isOverdue: milestone.status !== MilestoneStatus.COMPLETED &&
                     new Date(milestone.dueDate) < now,
                 daysUntilDue: Math.ceil((new Date(milestone.dueDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
@@ -502,10 +504,8 @@ export class SupervisorDashboardService {
         return milestones.map(milestone => ({
             id: milestone.id,
             title: milestone.title,
-            projectTitle: milestone.project.title,
-            studentName: milestone.project.student?.studentProfile?.firstName && milestone.project.student?.studentProfile?.lastName
-                ? `${milestone.project.student.studentProfile.firstName} ${milestone.project.student.studentProfile.lastName}`
-                : milestone.project.student?.email || 'Unassigned',
+            projectTitle: milestone.project?.title || 'Unknown',
+            studentName: milestone.project?.student?.studentProfile?.name || milestone.project?.student?.email || 'Unassigned',
             dueDate: milestone.dueDate.toISOString().split('T')[0],
             daysOverdue: Math.ceil((now.getTime() - new Date(milestone.dueDate).getTime()) / (1000 * 60 * 60 * 24)),
             priority: milestone.priority,

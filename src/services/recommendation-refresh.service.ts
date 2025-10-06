@@ -25,10 +25,10 @@ export class RecommendationRefreshService {
   private isRefreshRunning = false;
 
   // Configuration
-  private readonly STALE_THRESHOLD_HOURS = 2; // Consider recommendations stale after 2 hours
+  private readonly STALE_THRESHOLD_HOURS = 24; // Consider recommendations stale after 24 hours (was 2)
   private readonly ACTIVE_USER_DAYS = 7; // Users active in last 7 days
-  private readonly BATCH_SIZE = 10; // Process users in batches
-  private readonly BATCH_DELAY_MS = 1000; // Delay between batches to prevent overload
+  private readonly BATCH_SIZE = 5; // Process users in batches (reduced from 10)
+  private readonly BATCH_DELAY_MS = 5000; // Delay between batches to prevent rate limits (increased from 1000)
 
   constructor(
     @InjectRepository(User)
@@ -39,12 +39,12 @@ export class RecommendationRefreshService {
     private readonly projectViewRepository: Repository<ProjectView>,
     private readonly recommendationService: RecommendationService,
     private readonly cacheService: RecommendationCacheService,
-  ) {}
+  ) { }
 
   /**
-   * Scheduled task to refresh stale recommendations every 2 hours
+   * Scheduled task to refresh stale recommendations every 6 hours (reduced frequency)
    */
-  @Cron('0 */2 * * *') // Every 2 hours
+  @Cron('0 */6 * * *') // Every 6 hours (was 2)
   async refreshStaleRecommendations(): Promise<void> {
     if (this.isRefreshRunning) {
       this.logger.warn('Recommendation refresh already running, skipping...');
@@ -70,7 +70,7 @@ export class RecommendationRefreshService {
 
       this.logger.log(
         `Stale recommendation refresh completed: ${stats.refreshedCount}/${stats.totalStudents} refreshed, ` +
-          `${stats.errorCount} errors, ${stats.skippedCount} skipped in ${stats.processingTimeMs}ms`,
+        `${stats.errorCount} errors, ${stats.skippedCount} skipped in ${stats.processingTimeMs}ms`,
       );
     } catch (error) {
       this.logger.error(
@@ -84,8 +84,9 @@ export class RecommendationRefreshService {
 
   /**
    * Scheduled task to warm up cache for active users daily at 1 AM
+   * DISABLED: Using lazy loading instead to avoid rate limits and unnecessary API calls
    */
-  @Cron(CronExpression.EVERY_DAY_AT_1AM)
+  // @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async warmUpActiveUserCache(): Promise<void> {
     try {
       this.logger.log('Starting cache warm-up for active users...');
@@ -112,7 +113,7 @@ export class RecommendationRefreshService {
 
       this.logger.log(
         `Cache warm-up completed: ${stats.refreshedCount}/${stats.totalStudents} warmed up, ` +
-          `${stats.errorCount} errors in ${stats.processingTimeMs}ms`,
+        `${stats.errorCount} errors in ${stats.processingTimeMs}ms`,
       );
     } catch (error) {
       this.logger.error('Error during cache warm-up:', error);
@@ -256,11 +257,11 @@ export class RecommendationRefreshService {
     const activeStudents =
       activeUserIds.length > 0
         ? await this.userRepository
-            .createQueryBuilder('user')
-            .select('user.id')
-            .where('user.id IN (:...activeUserIds)', { activeUserIds })
-            .andWhere('user.role = :role', { role: UserRole.STUDENT })
-            .getMany()
+          .createQueryBuilder('user')
+          .select('user.id')
+          .where('user.id IN (:...activeUserIds)', { activeUserIds })
+          .andWhere('user.role = :role', { role: UserRole.STUDENT })
+          .getMany()
         : [];
 
     return activeStudents.map((student) => student.id);

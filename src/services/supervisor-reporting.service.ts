@@ -43,8 +43,7 @@ export interface SupervisorReportingServiceInterface {
 
 @Injectable()
 export class SupervisorReportingService
-  implements SupervisorReportingServiceInterface
-{
+  implements SupervisorReportingServiceInterface {
   private readonly logger = new Logger(SupervisorReportingService.name);
 
   constructor(
@@ -56,7 +55,7 @@ export class SupervisorReportingService
     private readonly projectRepository: Repository<Project>,
     private readonly analyticsService: MilestoneAnalyticsService,
     private readonly cacheService: MilestoneCacheService,
-  ) {}
+  ) { }
 
   async getSupervisorDashboard(
     supervisorId: string,
@@ -218,6 +217,37 @@ export class SupervisorReportingService
     // Apply student filter if specified
     if (filters.studentIds && filters.studentIds.length > 0) {
       studentIds = studentIds.filter((id) => filters.studentIds!.includes(id));
+    }
+
+    // If no students, return empty report
+    if (studentIds.length === 0) {
+      const now = new Date();
+      return {
+        reportId: `report-${now.getTime()}`,
+        supervisorId,
+        generatedAt: now.toISOString(),
+        reportPeriod: {
+          startDate: filters.startDate || null,
+          endDate: filters.endDate || null,
+        },
+        filters,
+        metrics: {
+          totalMilestones: 0,
+          completedMilestones: 0,
+          overdueMilestones: 0,
+          blockedMilestones: 0,
+          overallCompletionRate: 0,
+          averageProgressVelocity: 0,
+          atRiskStudentCount: 0,
+        },
+        studentData: [],
+        summary: {
+          totalStudents: 0,
+          totalMilestones: 0,
+          completionRate: 0,
+          atRiskStudents: 0,
+        },
+      };
     }
 
     // Get milestones with date filters
@@ -546,11 +576,11 @@ export class SupervisorReportingService
       riskScore: Math.round(riskScore * 100) / 100,
       nextMilestone: nextMilestone
         ? {
-            id: nextMilestone.id,
-            title: nextMilestone.title,
-            dueDate: nextMilestone.dueDate.toISOString().split('T')[0],
-            priority: nextMilestone.priority,
-          }
+          id: nextMilestone.id,
+          title: nextMilestone.title,
+          dueDate: nextMilestone.dueDate.toISOString().split('T')[0],
+          priority: nextMilestone.priority,
+        }
         : null,
       lastActivity,
       projectCount: new Set(milestones.map((m) => m.projectId).filter(Boolean))
@@ -616,7 +646,7 @@ export class SupervisorReportingService
     if (
       !summary.lastActivity ||
       new Date().getTime() - new Date(summary.lastActivity).getTime() >
-        7 * 24 * 60 * 60 * 1000
+      7 * 24 * 60 * 60 * 1000
     ) {
       factors.push('No recent activity');
     }
@@ -676,7 +706,7 @@ export class SupervisorReportingService
         (m) =>
           m.updatedAt &&
           new Date().getTime() - m.updatedAt.getTime() <
-            7 * 24 * 60 * 60 * 1000,
+          7 * 24 * 60 * 60 * 1000,
       )
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
       .slice(0, 10)

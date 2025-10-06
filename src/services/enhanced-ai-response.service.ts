@@ -115,7 +115,64 @@ export class EnhancedAIResponseService {
     }
 
     /**
-     * Generate response using OpenRouter
+     * Generate intelligent fallback response when AI fails or produces low-quality output
+     */
+    private async generateFallbackResponse(
+        request: EnhancedAIRequest,
+        processedQuery: ProcessedQuery,
+        reason: string
+    ): Promise<string> {
+        this.logger.warn(`Generating fallback response due to: ${reason}`);
+
+        // Build a helpful fallback based on query category and intent
+        const fallbackParts: string[] = [];
+
+        // Acknowledge the query
+        fallbackParts.push(`I understand you're asking about ${processedQuery.category.replace(/_/g, ' ')}.`);
+
+        // Provide category-specific guidance
+        const categoryGuidance = this.getCategorySpecificGuidance(processedQuery.category);
+        if (categoryGuidance) {
+            fallbackParts.push(categoryGuidance);
+        }
+
+        // Add intent-specific suggestions
+        switch (processedQuery.intent) {
+            case 'definition':
+                fallbackParts.push('For detailed definitions, I recommend consulting your course materials or academic resources.');
+                break;
+            case 'question':
+                fallbackParts.push('This is a great question that might benefit from discussion with your supervisor.');
+                break;
+            case 'request_guidance':
+                fallbackParts.push('For specific guidance on this topic, consider scheduling a meeting with your project supervisor.');
+                break;
+            case 'example_request':
+                fallbackParts.push('You can find relevant examples in academic journals, past project repositories, or your course materials.');
+                break;
+        }
+
+        // Add helpful next steps
+        fallbackParts.push('In the meantime, you might want to:');
+        fallbackParts.push('• Review your project documentation and requirements');
+        fallbackParts.push('• Check your course materials for related information');
+        fallbackParts.push('• Discuss this with your supervisor or peers');
+
+        // Add project-specific context if available
+        try {
+            const milestoneGuidance = await this.projectContextService.generateMilestoneAwareGuidance(request.userId);
+            if (milestoneGuidance.urgentMilestones.length > 0) {
+                fallbackParts.push(`\n⚠️ Note: You have ${milestoneGuidance.urgentMilestones.length} urgent milestone(s) that may need attention.`);
+            }
+        } catch (error) {
+            // Silently fail if we can't get milestone context
+        }
+
+        return fallbackParts.join('\n\n');
+    }
+
+    /**
+     * Generate response using OpenRouter with quality validation and fallback
      */
     private async generateOpenRouterResponse(
         request: EnhancedAIRequest,
@@ -168,21 +225,64 @@ export class EnhancedAIResponseService {
             topP: 0.9,
         };
 
-        // Make request to OpenRouter
-        const openRouterResponse = await this.openRouterService.routeRequest(
-            openRouterRequest,
-            modelSelection,
-            request.userId
-        );
+        // Make request to OpenRouter with retry logic
+        let openRouterResponse;
+        let responseContent = '';
+        let confidenceScore = 0;
+        let retryCount = 0;
+        const maxRetries = this.config.maxRetries;
+
+        while (retryCount < maxRetries) {
+            try {
+                openRouterResponse = await this.openRouterService.routeRequest(
+                    openRouterRequest,
+                    modelSelection,
+                    request.userId
+                );
+
+                // Extract response content
+                responseContent = openRouterResponse.choices[0]?.message?.content || '';
+
+                // Calculate confidence score
+                confidenceScore = this.estimateConfidenceScore(responseContent, processedQuery);
+
+                // Validate response quality
+                const validation = this.validateResponseQuality(responseContent, confidenceScore, processedQuery);
+
+                if (validation.isValid) {
+                    // Response is good, break out of retry loop
+                    break;
+                } else if (validation.shouldUseFallback) {
+                    // Quality issues that warrant fallback
+                    this.logger.warn(`Response quality issues: ${validation.issues.join(', ')}`);
+                    responseContent = await this.generateFallbackResponse(request, processedQuery, validation.issues.join(', '));
+                    confidenceScore = 0.6; // Fallback responses have moderate confidence
+                    break;
+                } else if (validation.shouldRetry && retryCount < maxRetries - 1) {
+                    // Retry with adjusted parameters
+                    this.logger.debug(`Retrying due to: ${validation.issues.join(', ')}`);
+                    retryCount++;
+
+                    // Adjust temperature for retry (make it more focused)
+                    openRouterRequest.temperature = Math.max(0.5, (openRouterRequest.temperature || 0.7) - 0.1);
+                    continue;
+                } else {
+                    // Max retries reached or no retry needed
+                    this.logger.warn(`Using response despite issues: ${validation.issues.join(', ')}`);
+                    break;
+                }
+            } catch (error) {
+                retryCount++;
+                if (retryCount >= maxRetries) {
+                    throw error;
+                }
+                this.logger.warn(`OpenRouter request failed, retry ${retryCount}/${maxRetries}: ${error.message}`);
+                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Exponential backoff
+            }
+        }
 
         // Get budget status
         const budgetStatus = await this.openRouterService.getBudgetStatus(request.userId);
-
-        // Extract response content
-        const responseContent = openRouterResponse.choices[0]?.message?.content || '';
-
-        // Calculate confidence score (OpenRouter doesn't provide this, so we estimate)
-        const confidenceScore = this.estimateConfidenceScore(responseContent, processedQuery);
 
         // Generate follow-up suggestions
         const followUps = await this.generateFollowUpSuggestions(processedQuery, responseContent, request.userId);
@@ -204,14 +304,18 @@ export class EnhancedAIResponseService {
         };
 
         return {
-            response: this.enhanceResponseWithContext(responseContent, enhancedContext, request.userId),
+            response: await this.enhanceResponseWithContext(responseContent, enhancedContext, request.userId),
             confidenceScore,
             sources: this.determineSources(enhancedContext, processedQuery, modelSelection.provider),
             metadata,
             processedQuery,
-            contextUsed: metadata.contextUsed,
+            contextUsed: {
+                projectInfo: metadata.contextUsed?.projectInfo || false,
+                conversationHistory: metadata.contextUsed?.conversationHistory || false,
+                knowledgeBase: metadata.contextUsed?.knowledgeBase || false,
+            },
             suggestedFollowUps: followUps,
-            requiresHumanReview: metadata.requiresHumanReview,
+            requiresHumanReview: metadata.requiresHumanReview || false,
             modelUsed: modelSelection.modelId,
             provider: modelSelection.provider,
             actualCost: openRouterResponse.cost,
@@ -223,7 +327,7 @@ export class EnhancedAIResponseService {
     }
 
     /**
-     * Generate response using Hugging Face (fallback)
+     * Generate response using Hugging Face (fallback) with quality validation
      */
     private async generateHuggingFaceResponse(
         request: EnhancedAIRequest,
@@ -240,7 +344,22 @@ export class EnhancedAIResponseService {
         };
 
         // Make request to Hugging Face
-        const qaResponse = await this.huggingFaceService.questionAnswering(qaRequest, request.userId);
+        let qaResponse = await this.huggingFaceService.questionAnswering(qaRequest, request.userId);
+
+        // Validate response quality
+        const validation = this.validateResponseQuality(qaResponse.answer, qaResponse.score, processedQuery);
+
+        if (!validation.isValid && validation.shouldUseFallback) {
+            // Use intelligent fallback if quality is too low
+            this.logger.warn(`Hugging Face response quality issues: ${validation.issues.join(', ')}`);
+            const fallbackResponse = await this.generateFallbackResponse(request, processedQuery, validation.issues.join(', '));
+            qaResponse = {
+                answer: fallbackResponse,
+                score: 0.6, // Moderate confidence for fallback
+                start: 0,
+                end: fallbackResponse.length
+            };
+        }
 
         // Generate follow-up suggestions
         const followUps = await this.generateFollowUpSuggestions(processedQuery, qaResponse.answer, request.userId);
@@ -262,14 +381,18 @@ export class EnhancedAIResponseService {
         };
 
         return {
-            response: this.enhanceResponseWithContext(qaResponse.answer, enhancedContext, request.userId),
+            response: await this.enhanceResponseWithContext(qaResponse.answer, enhancedContext, request.userId),
             confidenceScore: qaResponse.score,
             sources: this.determineSources(enhancedContext, processedQuery, 'Hugging Face'),
             metadata,
             processedQuery,
-            contextUsed: metadata.contextUsed,
+            contextUsed: {
+                projectInfo: metadata.contextUsed?.projectInfo || false,
+                conversationHistory: metadata.contextUsed?.conversationHistory || false,
+                knowledgeBase: metadata.contextUsed?.knowledgeBase || false,
+            },
             suggestedFollowUps: followUps,
-            requiresHumanReview: metadata.requiresHumanReview,
+            requiresHumanReview: metadata.requiresHumanReview || false,
             modelUsed: this.huggingFaceService.getQAModelInfo().name,
             provider: 'Hugging Face',
         };
@@ -331,40 +454,53 @@ export class EnhancedAIResponseService {
     }
 
     /**
-     * Build system prompt for OpenRouter
+     * Build system prompt for OpenRouter (conversational AI approach)
      */
     private buildSystemPrompt(processedQuery: ProcessedQuery, context: any): string {
-        let systemPrompt = `You are an intelligent AI assistant specialized in helping final year project students. 
-You provide clear, accurate, and helpful guidance on academic projects, research, and development.
+        let systemPrompt = `You are an intelligent, conversational AI assistant specialized in mentoring final year project students. 
+You engage in natural dialogue, provide thoughtful guidance, and adapt your responses to the student's needs and context.
 
-Context about the user's query:
-- Category: ${processedQuery.category}
-- Intent: ${processedQuery.intent}
+Your role is to:
+- Act as a knowledgeable mentor who understands academic project challenges
+- Provide clear, structured, and actionable advice
+- Consider the student's current situation and progress
+- Encourage critical thinking and independent problem-solving
+- Offer specific examples and practical suggestions when helpful
+- Maintain an encouraging and supportive tone
+
+Current conversation context:
+- Topic Category: ${processedQuery.category.replace(/_/g, ' ')}
+- Student's Intent: ${processedQuery.intent.replace(/_/g, ' ')}
 - Academic Level: ${processedQuery.metadata.academicLevel}
-- Complexity: ${processedQuery.metadata.complexity}`;
+- Query Complexity: ${processedQuery.metadata.complexity}`;
 
         if (context.projectContext) {
-            systemPrompt += `\n\nProject Context: ${context.projectContext}`;
+            systemPrompt += `\n\nStudent's Project Context:\n${context.projectContext}`;
         }
 
         if (context.milestoneContext) {
-            systemPrompt += `\n\nMilestone Status: ${context.milestoneContext}`;
+            systemPrompt += `\n\nCurrent Milestone Status:\n${context.milestoneContext}`;
         }
 
         if (context.conversationSummary) {
-            systemPrompt += `\n\nPrevious Discussion: ${context.conversationSummary}`;
+            systemPrompt += `\n\nPrevious Discussion Topics:\n${context.conversationSummary}`;
         }
 
         if (context.knowledgeBaseContext) {
-            systemPrompt += `\n\nRelevant Guidelines: ${context.knowledgeBaseContext}`;
+            systemPrompt += `\n\nRelevant Academic Guidelines:\n${context.knowledgeBaseContext}`;
         }
 
-        systemPrompt += `\n\nPlease provide a helpful, accurate response that:
-1. Directly addresses the user's question
-2. Considers their project context and current phase
-3. Provides actionable guidance
-4. Uses clear, academic language appropriate for final year students
-5. Suggests next steps when relevant`;
+        systemPrompt += `\n\nResponse Guidelines:
+1. Directly address the student's question with relevant, specific information
+2. Reference their project context and current phase when applicable
+3. Provide structured, actionable guidance with clear next steps
+4. Use examples or analogies to clarify complex concepts
+5. Maintain academic rigor while being conversational and approachable
+6. If the question is complex, break down your response into clear sections
+7. Suggest follow-up actions or resources when appropriate
+8. Be honest about limitations - if you're uncertain, acknowledge it and suggest alternatives
+
+Keep your response focused, practical, and helpful. Aim for 2-4 well-structured paragraphs unless more detail is clearly needed.`;
 
         return systemPrompt;
     }
@@ -446,20 +582,76 @@ Context about the user's query:
     }
 
     /**
-     * Estimate confidence score for OpenRouter responses
+     * Estimate confidence score for OpenRouter responses with improved heuristics
      */
     private estimateConfidenceScore(response: string, processedQuery: ProcessedQuery): number {
-        let confidence = 0.8; // Base confidence for OpenRouter models
+        let confidence = 0.85; // Base confidence for conversational AI models (higher than Q&A)
 
-        // Adjust based on response length and quality indicators
-        if (response.length < 50) confidence -= 0.2; // Very short responses
-        if (response.includes('I don\'t know') || response.includes('I\'m not sure')) confidence -= 0.3;
-        if (response.includes('However') || response.includes('Additionally')) confidence += 0.1; // Nuanced responses
+        // Response quality indicators
+        const qualityIndicators = {
+            veryShort: response.length < 50,
+            short: response.length < 100,
+            adequate: response.length >= 100 && response.length <= 500,
+            detailed: response.length > 500,
+            hasUncertainty: /I don't know|I'm not sure|I cannot|unclear|uncertain/i.test(response),
+            hasHedging: /might|may|could|possibly|perhaps/i.test(response),
+            hasNuance: /however|additionally|furthermore|moreover|on the other hand/i.test(response),
+            hasStructure: /first|second|third|finally|in conclusion|\d\./i.test(response),
+            hasExamples: /for example|for instance|such as|e\.g\./i.test(response),
+            hasReferences: /according to|research shows|studies indicate/i.test(response),
+            isGeneric: /general|typically|usually|often|common/gi.test(response) && response.length < 150,
+            hasSpecifics: /specifically|particularly|precisely|exactly/i.test(response),
+        };
 
-        // Adjust based on query complexity
-        if (processedQuery.metadata.complexity === 'complex') confidence -= 0.1;
-        if (processedQuery.metadata.academicLevel === 'research') confidence += 0.1;
+        // Length-based adjustments
+        if (qualityIndicators.veryShort) confidence -= 0.25;
+        else if (qualityIndicators.short) confidence -= 0.15;
+        else if (qualityIndicators.adequate) confidence += 0.05;
+        else if (qualityIndicators.detailed) confidence += 0.10;
 
+        // Uncertainty indicators (strong negative impact)
+        if (qualityIndicators.hasUncertainty) confidence -= 0.35;
+        else if (qualityIndicators.hasHedging) confidence -= 0.10;
+
+        // Quality indicators (positive impact)
+        if (qualityIndicators.hasNuance) confidence += 0.08;
+        if (qualityIndicators.hasStructure) confidence += 0.07;
+        if (qualityIndicators.hasExamples) confidence += 0.10;
+        if (qualityIndicators.hasReferences) confidence += 0.12;
+        if (qualityIndicators.hasSpecifics) confidence += 0.08;
+
+        // Generic response penalty
+        if (qualityIndicators.isGeneric) confidence -= 0.20;
+
+        // Query complexity adjustments
+        if (processedQuery.metadata.complexity === 'complex') {
+            // Complex queries need more detailed responses
+            if (qualityIndicators.detailed && qualityIndicators.hasStructure) {
+                confidence += 0.05;
+            } else {
+                confidence -= 0.12;
+            }
+        }
+
+        // Academic level adjustments
+        if (processedQuery.metadata.academicLevel === 'research') {
+            if (qualityIndicators.hasReferences || qualityIndicators.hasSpecifics) {
+                confidence += 0.10;
+            } else {
+                confidence -= 0.08;
+            }
+        }
+
+        // Intent-based adjustments
+        if (processedQuery.intent === 'definition' && qualityIndicators.short && !qualityIndicators.hasExamples) {
+            confidence -= 0.10; // Definitions should include examples
+        }
+
+        if (processedQuery.intent === 'request_guidance' && !qualityIndicators.hasStructure) {
+            confidence -= 0.12; // Guidance should be structured
+        }
+
+        // Ensure confidence is within valid range
         return Math.max(0.1, Math.min(1.0, confidence));
     }
 
@@ -541,6 +733,98 @@ Context about the user's query:
         topics.push(...categoryTopics);
 
         return [...new Set(topics)].slice(0, 5);
+    }
+
+    /**
+     * Validate response quality before returning to user
+     */
+    private validateResponseQuality(
+        response: string,
+        confidenceScore: number,
+        processedQuery: ProcessedQuery
+    ): {
+        isValid: boolean;
+        issues: string[];
+        shouldRetry: boolean;
+        shouldUseFallback: boolean;
+    } {
+        const issues: string[] = [];
+        let shouldRetry = false;
+        let shouldUseFallback = false;
+
+        // Check minimum length
+        if (response.length < 20) {
+            issues.push('Response too short');
+            shouldRetry = true;
+        }
+
+        // Check for empty or meaningless responses
+        if (!response.trim() || response.trim() === '.' || response.trim() === 'N/A') {
+            issues.push('Empty or meaningless response');
+            shouldRetry = true;
+        }
+
+        // Check for error messages in response
+        const errorPatterns = [
+            /error|exception|failed|unable to process/i,
+            /I cannot answer|I don't have access|I'm unable to/i,
+            /invalid|malformed|corrupted/i
+        ];
+        if (errorPatterns.some(pattern => pattern.test(response))) {
+            issues.push('Response contains error indicators');
+            shouldUseFallback = true;
+        }
+
+        // Check confidence threshold
+        if (confidenceScore < this.config.confidenceThreshold) {
+            issues.push(`Low confidence score: ${confidenceScore.toFixed(2)}`);
+            shouldUseFallback = true;
+        }
+
+        // Check for inappropriate content
+        const inappropriatePatterns = [
+            /\b(hate|violence|explicit)\b/i,
+            /\b(offensive|discriminatory)\b/i
+        ];
+        if (inappropriatePatterns.some(pattern => pattern.test(response))) {
+            issues.push('Potentially inappropriate content detected');
+            shouldUseFallback = true;
+        }
+
+        // Check relevance to query
+        const queryKeywords = processedQuery.keywords.map(k => k.toLowerCase());
+        const responseWords = response.toLowerCase().split(/\s+/);
+        const keywordMatches = queryKeywords.filter(keyword =>
+            responseWords.some(word => word.includes(keyword) || keyword.includes(word))
+        );
+
+        if (queryKeywords.length > 0 && keywordMatches.length === 0) {
+            issues.push('Response may not be relevant to query');
+            shouldRetry = true;
+        }
+
+        // Check for completeness (no abrupt endings)
+        if (response.length > 50 && !response.match(/[.!?]$/)) {
+            issues.push('Response appears incomplete');
+            shouldRetry = true;
+        }
+
+        // Check for repetition
+        const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 0);
+        const uniqueSentences = new Set(sentences.map(s => s.trim().toLowerCase()));
+        if (sentences.length > 2 && uniqueSentences.size < sentences.length * 0.7) {
+            issues.push('Response contains excessive repetition');
+            shouldRetry = true;
+        }
+
+        const isValid = issues.length === 0;
+
+        return {
+            isValid,
+            issues,
+            shouldRetry: shouldRetry && !shouldUseFallback,
+            shouldUseFallback
+        };
     }
 
     /**

@@ -465,8 +465,7 @@ export class OpenRouterService {
             tokensUsed: tokens,
             responseTimeMs: 0, // Will be updated by caller
             success: true,
-            userId,
-            cost
+            userId
         });
 
         // Log budget warnings

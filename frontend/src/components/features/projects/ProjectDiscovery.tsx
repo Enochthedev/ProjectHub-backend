@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { SlidersHorizontal, X } from 'lucide-react';
 import { ProjectSearch } from './ProjectSearch';
 import { ProjectFilters } from './ProjectFilters';
 import { ProjectGrid } from './ProjectGrid';
-import { ProjectDetail } from './ProjectDetail';
 import { Button } from '@/components/ui/Button';
 import { useProjectSearch } from '@/hooks/useProjects';
 import { useProjectStore, useSearchParamsWithFilters } from '@/stores/project';
@@ -18,8 +18,8 @@ interface ProjectDiscoveryProps {
 export const ProjectDiscovery: React.FC<ProjectDiscoveryProps> = ({
   className,
 }) => {
+  const router = useRouter();
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   
   const { data, isLoading, error } = useProjectSearch();
   const { setSearchParams } = useProjectStore();
@@ -30,11 +30,8 @@ export const ProjectDiscovery: React.FC<ProjectDiscoveryProps> = ({
   };
 
   const handleProjectView = (projectId: string) => {
-    setSelectedProjectId(projectId);
-  };
-
-  const handleBackToGrid = () => {
-    setSelectedProjectId(null);
+    // Navigate to the project detail page using Next.js routing
+    router.push(`/projects/${projectId}`);
   };
 
   const handleSortChange = (sortBy: string, sortOrder: 'asc' | 'desc') => {
@@ -44,19 +41,6 @@ export const ProjectDiscovery: React.FC<ProjectDiscoveryProps> = ({
       page: 1 
     });
   };
-
-  // Show project detail view
-  if (selectedProjectId) {
-    return (
-      <div className={className}>
-        <ProjectDetail
-          projectId={selectedProjectId}
-          onBack={handleBackToGrid}
-          onProjectView={handleProjectView}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className={cn('space-y-6', className)}>

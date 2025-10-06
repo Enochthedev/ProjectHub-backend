@@ -54,8 +54,7 @@ export interface MilestoneTemplateApplicationServiceInterface {
 
 @Injectable()
 export class MilestoneTemplateApplicationService
-  implements MilestoneTemplateApplicationServiceInterface
-{
+  implements MilestoneTemplateApplicationServiceInterface {
   private readonly logger = new Logger(
     MilestoneTemplateApplicationService.name,
   );
@@ -70,7 +69,7 @@ export class MilestoneTemplateApplicationService
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   async applyTemplate(
     applyDto: ApplyTemplateDto,
@@ -176,7 +175,6 @@ export class MilestoneTemplateApplicationService
         estimatedHours:
           customization?.newEstimatedHours || templateMilestone.estimatedHours,
         projectId: applyDto.projectId,
-        tags: templateMilestone.tags,
       };
 
       milestonesToCreate.push(milestoneData);
@@ -382,13 +380,13 @@ export class MilestoneTemplateApplicationService
       for (const existing of existingMilestones) {
         const daysDifference = Math.abs(
           (proposed.dueDate.getTime() - existing.dueDate.getTime()) /
-            (1000 * 60 * 60 * 24),
+          (1000 * 60 * 60 * 24),
         );
 
         if (daysDifference <= conflictThresholdDays) {
           conflicts.push(
             `"${proposed.title}" conflicts with existing milestone "${existing.title}" ` +
-              `(${daysDifference.toFixed(0)} days apart)`,
+            `(${daysDifference.toFixed(0)} days apart)`,
           );
         }
       }
@@ -398,13 +396,13 @@ export class MilestoneTemplateApplicationService
         if (proposed !== other) {
           const daysDifference = Math.abs(
             (proposed.dueDate.getTime() - other.dueDate.getTime()) /
-              (1000 * 60 * 60 * 24),
+            (1000 * 60 * 60 * 24),
           );
 
           if (daysDifference <= conflictThresholdDays) {
             conflicts.push(
               `"${proposed.title}" conflicts with "${other.title}" ` +
-                `(${daysDifference.toFixed(0)} days apart)`,
+              `(${daysDifference.toFixed(0)} days apart)`,
             );
           }
         }

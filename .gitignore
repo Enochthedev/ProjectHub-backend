@@ -124,7 +124,7 @@ dist
 .pnp.*
 
 
-.kiro
+
 
 # Build artifacts
 dist/
@@ -166,3 +166,5 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+.kiro

@@ -123,6 +123,19 @@ export class SearchProjectsDto {
   isGroupProject?: boolean;
 
   @ApiPropertyOptional({
+    description: 'Page number (alternative to offset, 1-indexed)',
+    example: 1,
+    default: 1,
+    minimum: 1,
+    type: Number,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Page must be an integer' })
+  @Min(1, { message: 'Page must be at least 1' })
+  page?: number;
+
+  @ApiPropertyOptional({
     description: 'Number of results to return per page',
     example: 20,
     default: 20,
@@ -158,6 +171,7 @@ export class SearchProjectsDto {
   })
   @IsOptional()
   @IsEnum(ProjectSortBy, { message: 'Invalid sort by option' })
+  @Transform(({ value }) => value || ProjectSortBy.RELEVANCE)
   sortBy?: ProjectSortBy = ProjectSortBy.RELEVANCE;
 
   @ApiPropertyOptional({
@@ -168,5 +182,6 @@ export class SearchProjectsDto {
   })
   @IsOptional()
   @IsEnum(SortOrder, { message: 'Invalid sort order' })
+  @Transform(({ value }) => value || SortOrder.DESC)
   sortOrder?: SortOrder = SortOrder.DESC;
 }

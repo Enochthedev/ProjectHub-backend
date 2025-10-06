@@ -230,7 +230,7 @@ export const useSupervisorStore = create<SupervisorState>()(
             fetchDashboard: async () => {
                 set({ isLoadingDashboard: true, dashboardError: null });
                 try {
-                    const response = await api.get('/supervisor/dashboard');
+                    const response = await api.get('/dashboard/supervisor');
                     set({ dashboard: response.data, isLoadingDashboard: false });
                 } catch (error: any) {
                     set({

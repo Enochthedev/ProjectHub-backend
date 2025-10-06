@@ -6,7 +6,7 @@ import { useProjectStore } from '@/stores/project';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CurrentProjectWidget } from './CurrentProjectWidget';
 import { ProjectStatusUpdate, StatusHistory } from './ProjectStatusUpdate';
 import { ProjectCommunication } from './ProjectCommunication';

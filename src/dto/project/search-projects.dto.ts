@@ -99,6 +99,16 @@ export class SearchProjectsDto {
   limit?: number = 20;
 
   @ApiPropertyOptional({
+    description: 'Page number (alternative to offset)',
+    example: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({
     description: 'Number of results to skip',
     example: 0,
     default: 0,
@@ -108,4 +118,22 @@ export class SearchProjectsDto {
   @IsInt()
   @Min(0)
   offset?: number = 0;
+
+  @ApiPropertyOptional({
+    description: 'Sort by field',
+    example: 'relevance',
+    enum: ['relevance', 'date', 'title', 'popularity'],
+  })
+  @IsOptional()
+  @IsString()
+  sortBy?: string = 'relevance';
+
+  @ApiPropertyOptional({
+    description: 'Sort order',
+    example: 'desc',
+    enum: ['asc', 'desc'],
+  })
+  @IsOptional()
+  @IsString()
+  sortOrder?: string = 'desc';
 }

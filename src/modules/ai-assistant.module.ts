@@ -5,6 +5,7 @@ import { CacheModule } from '@nestjs/cache-manager';
 
 // Controllers
 import { AIAssistantController } from '../controllers/ai-assistant.controller';
+import { AIAssistantHealthController } from '../controllers/ai-assistant-health.controller';
 
 // Entities
 import { Conversation } from '../entities/conversation.entity';
@@ -41,9 +42,13 @@ import { AIRateLimiterService } from '../services/ai-rate-limiter.service';
 import { CircuitBreakerService } from '../services/circuit-breaker.service';
 import { ProjectContextIntegrationService } from '../services/project-context-integration.service';
 import { MilestoneGuidanceService } from '../services/milestone-guidance.service';
+import { AIErrorHandlerService } from '../services/ai-error-handler.service';
+import { AIAssistantErrorRecoveryService } from '../services/ai-assistant-error-recovery.service';
+import { AIAssistantMonitoringService } from '../services/ai-assistant-monitoring.service';
 
 // Additional services
 import { AdminAuditService } from '../services/admin-audit.service';
+import { LocalEmbeddingService } from '../services/local-embedding.service';
 import { EmbeddingService } from '../services/embedding.service';
 import { SimilarityService } from '../services/similarity.service';
 import { RecommendationCacheService } from '../services/recommendation-cache.service';
@@ -76,7 +81,7 @@ import { CommonModule } from '../common/common.module';
     }),
     CommonModule,
   ],
-  controllers: [AIAssistantController],
+  controllers: [AIAssistantController, AIAssistantHealthController],
   providers: [
     // Core AI services
     ConversationService,
@@ -99,6 +104,9 @@ import { CommonModule } from '../common/common.module';
     ConversationCacheService,
     AIRateLimiterService,
     CircuitBreakerService,
+    AIErrorHandlerService,
+    AIAssistantErrorRecoveryService,
+    AIAssistantMonitoringService,
 
     // Project and milestone integration services
     ProjectContextIntegrationService,
@@ -106,6 +114,7 @@ import { CommonModule } from '../common/common.module';
 
     // Additional required services
     AdminAuditService,
+    LocalEmbeddingService,
     EmbeddingService,
     SimilarityService,
     RecommendationCacheService,
@@ -122,6 +131,8 @@ import { CommonModule } from '../common/common.module';
     OpenRouterService,
     ProjectContextIntegrationService,
     MilestoneGuidanceService,
+    AIErrorHandlerService,
+    AIAssistantErrorRecoveryService,
   ],
 })
-export class AIAssistantModule { }
+export class AIAssistantModule {}

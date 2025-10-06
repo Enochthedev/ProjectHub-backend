@@ -20,8 +20,8 @@ export const EmptyBookmarksState: React.FC<EmptyBookmarksStateProps> = ({
         if (onBrowseProjects) {
             onBrowseProjects();
         } else {
-            // Default navigation to project discovery
-            window.location.href = '/dashboard/student';
+            // Default navigation to project discovery page
+            window.location.href = '/projects';
         }
     };
 

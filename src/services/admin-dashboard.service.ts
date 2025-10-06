@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThan, LessThan, Not } from 'typeorm';
+import { Repository, Between, MoreThan, LessThan, Not, IsNull } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { Project } from '../entities/project.entity';
 import { Milestone } from '../entities/milestone.entity';
@@ -18,6 +18,7 @@ import {
     TopPerformingProjectDto,
 } from '../dto/dashboard/admin-dashboard.dto';
 import { ApprovalStatus } from '../common/enums/approval-status.enum';
+import { UserRole } from '../common/enums/user-role.enum';
 import { MilestoneStatus } from '../common/enums/milestone-status.enum';
 
 @Injectable()
@@ -490,9 +491,9 @@ export class AdminDashboardService {
     }> {
         const [total, students, supervisors, admins, verified, active24h] = await Promise.all([
             this.userRepository.count(),
-            this.userRepository.count({ where: { role: 'student' } }),
-            this.userRepository.count({ where: { role: 'supervisor' } }),
-            this.userRepository.count({ where: { role: 'admin' } }),
+            this.userRepository.count({ where: { role: UserRole.STUDENT } }),
+            this.userRepository.count({ where: { role: UserRole.SUPERVISOR } }),
+            this.userRepository.count({ where: { role: UserRole.ADMIN } }),
             this.userRepository.count({ where: { isEmailVerified: true } }),
             this.userActivityService.getActiveUsersCount(),
         ]);
@@ -522,7 +523,7 @@ export class AdminDashboardService {
             this.projectRepository.count({ where: { approvalStatus: ApprovalStatus.APPROVED } }),
             this.projectRepository.count({ where: { approvalStatus: ApprovalStatus.PENDING } }),
             this.projectRepository.count({ where: { approvalStatus: ApprovalStatus.REJECTED } }),
-            this.projectRepository.count({ where: { studentId: Not(null) } }),
+            this.projectRepository.count({ where: { studentId: Not(IsNull()) } }),
         ]);
 
         return {

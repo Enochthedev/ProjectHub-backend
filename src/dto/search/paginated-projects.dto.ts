@@ -12,53 +12,22 @@ export class PaginatedProjectsDto {
   projects: ProjectSummaryDto[];
 
   @ApiProperty({
-    description: 'Total number of projects matching the search criteria',
-    example: 150,
+    description: 'Pagination information',
+    type: 'object',
+    properties: {
+      page: { type: 'number', example: 1 },
+      limit: { type: 'number', example: 20 },
+      total: { type: 'number', example: 150 },
+      totalPages: { type: 'number', example: 8 },
+    },
   })
   @Expose()
-  total: number;
-
-  @ApiProperty({
-    description: 'Number of projects per page',
-    example: 20,
-  })
-  @Expose()
-  limit: number;
-
-  @ApiProperty({
-    description: 'Number of projects skipped',
-    example: 0,
-  })
-  @Expose()
-  offset: number;
-
-  @ApiProperty({
-    description: 'Whether there are more projects available',
-    example: true,
-  })
-  @Expose()
-  hasNext: boolean;
-
-  @ApiProperty({
-    description: 'Whether there are previous projects available',
-    example: false,
-  })
-  @Expose()
-  hasPrevious: boolean;
-
-  @ApiProperty({
-    description: 'Total number of pages',
-    example: 8,
-  })
-  @Expose()
-  totalPages: number;
-
-  @ApiProperty({
-    description: 'Current page number (1-based)',
-    example: 1,
-  })
-  @Expose()
-  currentPage: number;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 
   @ApiPropertyOptional({
     description: 'Alternative search suggestions when no results found',
@@ -92,13 +61,12 @@ export class PaginatedProjectsDto {
     suggestions?: AlternativeSearchOptions,
   ) {
     this.projects = projects;
-    this.total = total;
-    this.limit = limit;
-    this.offset = offset;
-    this.hasNext = offset + limit < total;
-    this.hasPrevious = offset > 0;
-    this.totalPages = Math.ceil(total / limit);
-    this.currentPage = Math.floor(offset / limit) + 1;
+    this.pagination = {
+      page: Math.floor(offset / limit) + 1,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
     this.suggestions = suggestions;
   }
 }

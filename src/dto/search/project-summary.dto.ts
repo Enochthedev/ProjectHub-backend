@@ -88,28 +88,33 @@ export class ProjectSummaryDto {
     type: 'object',
     properties: {
       id: { type: 'string', format: 'uuid' },
-      firstName: { type: 'string' },
-      lastName: { type: 'string' },
+      name: { type: 'string' },
       email: { type: 'string', format: 'email' },
     },
     example: {
       id: '456e7890-e89b-12d3-a456-426614174001',
-      firstName: 'Dr. Jane',
-      lastName: 'Smith',
+      name: 'Dr. Jane Smith',
       email: 'jane.smith@university.edu',
     },
   })
   @Expose()
-  @Transform(({ obj }) => ({
-    id: obj.supervisor?.id,
-    firstName: obj.supervisor?.firstName,
-    lastName: obj.supervisor?.lastName,
-    email: obj.supervisor?.email,
-  }))
+  @Transform(({ obj }) => {
+    if (!obj.supervisor) return null;
+
+    // Combine firstName and lastName into name
+    const name = [obj.supervisor.firstName, obj.supervisor.lastName]
+      .filter(Boolean)
+      .join(' ') || 'Unknown Supervisor';
+
+    return {
+      id: obj.supervisor.id,
+      name,
+      email: obj.supervisor.email,
+    };
+  })
   supervisor: {
     id: string;
-    firstName: string;
-    lastName: string;
+    name: string;
     email: string;
   };
 

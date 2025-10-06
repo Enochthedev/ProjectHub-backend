@@ -9,11 +9,23 @@ interface WebSocketProviderProps {
 }
 
 export function WebSocketProvider({ children }: WebSocketProviderProps) {
-  const { user, token } = useAuthStore();
+  const { user, token, refreshTokens } = useAuthStore();
   const { connect, disconnect, isConnected, isConnecting } = useWebSocketStore();
   const connectionAttempted = useRef(false);
+  const lastToken = useRef<string | null>(null);
 
   useEffect(() => {
+    // Reset connection attempt if token changed (e.g., after refresh)
+    if (token !== lastToken.current) {
+      lastToken.current = token;
+      connectionAttempted.current = false;
+      
+      // Disconnect old connection if token changed
+      if (isConnected) {
+        disconnect();
+      }
+    }
+
     // Only connect if user is authenticated and we haven't attempted connection
     if (user && token && !isConnected && !isConnecting && !connectionAttempted.current) {
       connectionAttempted.current = true;
@@ -27,9 +39,25 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
         timeout: 20000,
-      }).catch((error) => {
-        console.error('Failed to connect to WebSocket:', error);
-        connectionAttempted.current = false; // Allow retry
+      }).catch(async (error) => {
+        console.warn('WebSocket connection failed:', error);
+        
+        // If it's a JWT error, try to refresh the token
+        if (error.message?.includes('invalid') || error.message?.includes('signature') || error.message?.includes('jwt')) {
+          console.log('JWT error detected, attempting token refresh...');
+          try {
+            await refreshTokens();
+            console.log('Token refreshed successfully, WebSocket will reconnect');
+            connectionAttempted.current = false; // Allow retry with new token
+          } catch (refreshError) {
+            console.error('Token refresh failed:', refreshError);
+            // Token refresh failed, user needs to re-login
+            console.log('Please log in again to restore WebSocket connection');
+          }
+        } else {
+          // For other errors, allow retry
+          connectionAttempted.current = false;
+        }
       });
     }
 
@@ -37,8 +65,9 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     if (!user && isConnected) {
       disconnect();
       connectionAttempted.current = false;
+      lastToken.current = null;
     }
-  }, [user, token, isConnected, isConnecting, connect, disconnect]);
+  }, [user, token, isConnected, isConnecting, connect, disconnect, refreshTokens]);
 
   // Cleanup on unmount
   useEffect(() => {

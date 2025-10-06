@@ -20,7 +20,8 @@ import {
   MessageSquare,
   Calendar,
   Award,
-  TrendingUp
+  TrendingUp,
+  Eye
 } from 'lucide-react';
 
 interface Supervisor {

@@ -39,7 +39,7 @@ export class ProjectsController {
     private readonly projectService: ProjectService,
     private readonly viewTrackingService: ProjectViewTrackingService,
     private readonly inputSanitizationService: InputSanitizationService,
-  ) {}
+  ) { }
 
   @Get()
   @Public()
@@ -149,6 +149,11 @@ export class ProjectsController {
         searchDto.tags = this.inputSanitizationService.sanitizeTags(
           searchDto.tags,
         );
+      }
+
+      // Convert page to offset if page is provided
+      if (searchDto.page && !searchDto.offset) {
+        searchDto.offset = (searchDto.page - 1) * (searchDto.limit || 20);
       }
 
       // Validate pagination parameters

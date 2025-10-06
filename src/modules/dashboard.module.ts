@@ -17,6 +17,7 @@ import { Recommendation } from '../entities/recommendation.entity';
 import { Conversation } from '../entities/conversation.entity';
 import { ConversationMessage } from '../entities/conversation-message.entity';
 import { PlatformAnalytics } from '../entities/platform-analytics.entity';
+import { ProjectView } from '../entities/project-view.entity';
 
 @Module({
     imports: [
@@ -31,6 +32,7 @@ import { PlatformAnalytics } from '../entities/platform-analytics.entity';
             Conversation,
             ConversationMessage,
             PlatformAnalytics,
+            ProjectView,
         ]),
     ],
     controllers: [DashboardController],

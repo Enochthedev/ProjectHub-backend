@@ -77,7 +77,7 @@ export class SupervisorDataSeeder {
             },
         ];
 
-        const savedSupervisors = [];
+        const savedSupervisors: User[] = [];
         for (const supervisor of supervisors) {
             const existingUser = await userRepository.findOne({
                 where: { email: supervisor.email },
@@ -264,7 +264,7 @@ export class SupervisorDataSeeder {
         }
 
         // Create sample conversations
-        const conversations = [];
+        const conversations: Conversation[] = [];
         for (let i = 0; i < 10; i++) {
             const student = students[i % students.length];
             const conversation = await conversationRepository.save({
@@ -361,7 +361,7 @@ export class SupervisorDataSeeder {
         const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
         const thisMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
 
-        const analyticsData = [];
+        const analyticsData: any[] = [];
 
         for (const supervisor of supervisors) {
             // Last month metrics

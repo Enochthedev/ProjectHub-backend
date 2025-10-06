@@ -458,8 +458,9 @@ export class BookmarkService {
         switch (field.field) {
           case 'supervisor':
             field.values[project.id] =
-              (project.supervisor?.firstName + ' ' + project.supervisor?.lastName).trim() ||
-              project.supervisor?.email || 'Unknown';
+              (project.supervisor as any)?.supervisorProfile?.name ||
+              project.supervisor?.email ||
+              'Unknown';
             break;
           case 'technologyStack':
           case 'tags':
@@ -560,13 +561,7 @@ export class BookmarkService {
       approvalStatus: project.approvalStatus,
       supervisor: {
         id: project.supervisor.id,
-        firstName:
-          project.supervisor.supervisorProfile?.name?.split(' ')[0] || '',
-        lastName:
-          project.supervisor.supervisorProfile?.name
-            ?.split(' ')
-            .slice(1)
-            .join(' ') || '',
+        name: project.supervisor.supervisorProfile?.name || 'Unknown Supervisor',
         email: project.supervisor.email,
       },
       createdAt: project.createdAt,

@@ -17,7 +17,8 @@ import {
   CheckCircle,
   Clock,
   Eye,
-  RefreshCw
+  RefreshCw,
+  X
 } from 'lucide-react';
 import { useSupervisorStore } from '@/stores/supervisor';
 import { supervisorApi } from '@/lib/supervisor-api';
@@ -31,6 +32,8 @@ export default function SupervisorReportsPage() {
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [studentProgress, setStudentProgress] = useState<any[]>([]);
+  const [showAllReports, setShowAllReports] = useState(false);
+  const [viewingReport, setViewingReport] = useState<string | null>(null);
 
   const clearReportFilters = () => {
     setReportFilters({});
@@ -494,11 +497,19 @@ export default function SupervisorReportsPage() {
                 <span className="text-xs text-gray-500">
                   {new Date(report.generatedAt).toLocaleDateString()}
                 </span>
-                <Button size="sm" variant="ghost">
+                <Button 
+                  size="sm" 
+                  variant="ghost"
+                  onClick={() => handleDownloadReport(report.id, report.format.toLowerCase())}
+                >
                   <Download className="w-3 h-3 mr-1" />
                   Download
                 </Button>
-                <Button size="sm" variant="ghost">
+                <Button 
+                  size="sm" 
+                  variant="ghost"
+                  onClick={() => setViewingReport(report.id)}
+                >
                   <Eye className="w-3 h-3 mr-1" />
                   View
                 </Button>
@@ -508,11 +519,148 @@ export default function SupervisorReportsPage() {
         </div>
         
         <div className="mt-4 text-center">
-          <Button variant="ghost" size="sm">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setShowAllReports(true)}
+          >
             View All Reports History
           </Button>
         </div>
       </Card>
+
+      {/* All Reports History Modal */}
+      {showAllReports && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">All Reports History</h2>
+                <p className="text-sm text-gray-600 mt-1">Complete history of generated reports</p>
+              </div>
+              <button 
+                onClick={() => setShowAllReports(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="space-y-3">
+                {[
+                  { id: 'report-1', name: 'Monthly Progress Report - March 2024', generatedAt: '2024-03-15T14:30:00Z', studentsCount: 8, format: 'PDF', size: '2.4 MB' },
+                  { id: 'report-2', name: 'At-Risk Students Analysis', generatedAt: '2024-03-10T09:15:00Z', studentsCount: 3, format: 'CSV', size: '156 KB' },
+                  { id: 'report-3', name: 'Weekly Progress Summary', generatedAt: '2024-03-08T16:45:00Z', studentsCount: 8, format: 'PDF', size: '1.8 MB' },
+                  { id: 'report-4', name: 'Q1 Comprehensive Report', generatedAt: '2024-03-01T10:00:00Z', studentsCount: 8, format: 'PDF', size: '3.2 MB' },
+                  { id: 'report-5', name: 'February Progress Report', generatedAt: '2024-02-28T15:30:00Z', studentsCount: 7, format: 'PDF', size: '2.1 MB' },
+                  { id: 'report-6', name: 'Mid-Semester Review', generatedAt: '2024-02-15T11:00:00Z', studentsCount: 8, format: 'PDF', size: '2.8 MB' },
+                ].map((report) => (
+                  <div key={report.id} className="flex items-center justify-between p-4 bg-gray-50 rounded border hover:bg-gray-100">
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-5 h-5 text-gray-600" />
+                      <div>
+                        <p className="font-medium text-black">{report.name}</p>
+                        <p className="text-sm text-gray-600">
+                          {report.studentsCount} students • {report.format} • {report.size} • {new Date(report.generatedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        onClick={() => handleDownloadReport(report.id, report.format.toLowerCase())}
+                      >
+                        <Download className="w-4 h-4 mr-1" />
+                        Download
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        onClick={() => {
+                          setViewingReport(report.id);
+                          setShowAllReports(false);
+                        }}
+                      >
+                        <Eye className="w-4 h-4 mr-1" />
+                        View
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Report Viewer Modal */}
+      {viewingReport && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Report Preview</h2>
+                <p className="text-sm text-gray-600 mt-1">Viewing report details</p>
+              </div>
+              <button 
+                onClick={() => setViewingReport(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Report Summary</h3>
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <p className="text-sm text-gray-600">Total Students</p>
+                    <p className="text-2xl font-bold text-gray-900">8</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total Milestones</p>
+                    <p className="text-2xl font-bold text-gray-900">96</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Completion Rate</p>
+                    <p className="text-2xl font-bold text-green-600">70.5%</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">At-Risk Students</p>
+                    <p className="text-2xl font-bold text-red-600">2</p>
+                  </div>
+                </div>
+                
+                <h4 className="font-semibold text-gray-900 mb-3">Student Progress</h4>
+                <div className="space-y-2">
+                  {['Sarah Johnson', 'Mike Kumar', 'Anna Lee', 'John Smith', 'Lisa Chen', 'Emma Davis', 'Tom Wilson', 'Jane Brown'].map((student, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-white rounded border">
+                      <span className="text-sm font-medium text-gray-900">{student}</span>
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm text-gray-600">12 milestones</span>
+                        <div className="w-32 bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full" 
+                            style={{ width: `${Math.floor(Math.random() * 40) + 60}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-medium text-gray-900">{Math.floor(Math.random() * 40) + 60}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function handleDownloadReport(reportId: string, format: string) {
+  // Mock download functionality
+  console.log(`Downloading report ${reportId} in ${format} format`);
+  alert(`Downloading report in ${format.toUpperCase()} format. This would trigger an actual download in production.`);
 }
