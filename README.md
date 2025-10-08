@@ -4,23 +4,25 @@ A comprehensive platform for managing final year projects with AI-powered guidan
 
 ## ⚡ Quick Start
 
-**Get started in 5 minutes:**
+**One command to set up everything:**
 
 ```bash
-chmod +x setup.sh && ./setup.sh
+./setup.sh
 ```
 
-Then start all services:
+**Then start all services:**
 
 ```bash
 ./start.sh
 ```
 
-Access at: http://localhost:3000
+**Access your app:** <http://localhost:3000>
 
-📖 **New to ProjectHub?** See [QUICKSTART.md](./QUICKSTART.md) for the fastest way to get running!
+🎯 **Zero configuration needed!** The setup script automatically installs Node.js, PostgreSQL, Redis, Python, and all dependencies.
 
-📚 **Need detailed setup?** Check [SETUP_GUIDE.md](./SETUP_GUIDE.md) for comprehensive instructions.
+📖 **First time?** See [QUICKSTART.md](./QUICKSTART.md) for the complete one-command setup guide!
+
+📚 **Need help?** Check [SETUP_GUIDE.md](./SETUP_GUIDE.md) for detailed instructions and troubleshooting.
 
 ## 🚀 Features
 
@@ -75,12 +77,14 @@ Access at: http://localhost:3000
 ## 📦 Prerequisites
 
 ### Required
+
 - **Node.js** 18+ ([Download](https://nodejs.org/))
 - **PostgreSQL** 14+ ([Download](https://www.postgresql.org/download/))
 - **Redis** 6+ ([Download](https://redis.io/download))
 - **npm** or **yarn**
 
 ### Optional
+
 - **Docker** & **Docker Compose** (for containerized deployment)
 - **Git** (for version control)
 
@@ -264,6 +268,7 @@ npm run build
 ```
 
 This script will:
+
 1. Run tests
 2. Build applications
 3. Validate configuration
@@ -351,32 +356,33 @@ GET    /health                 - Health check
 
 ### Backend
 
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | Yes | - |
-| `JWT_SECRET` | JWT signing secret | Yes | - |
-| `JWT_REFRESH_SECRET` | Refresh token secret | Yes | - |
-| `REDIS_URL` | Redis connection string | Yes | - |
-| `EMAIL_HOST` | SMTP host | Yes | - |
-| `EMAIL_USER` | SMTP username | Yes | - |
-| `EMAIL_PASSWORD` | SMTP password | Yes | - |
-| `HUGGING_FACE_API_KEY` | Hugging Face API key | Yes | - |
-| `OPENAI_API_KEY` | OpenAI API key | No | - |
-| `PORT` | Server port | No | 3001 |
+| Variable               | Description                  | Required | Default |
+| ---------------------- | ---------------------------- | -------- | ------- |
+| `DATABASE_URL`         | PostgreSQL connection string | Yes      | -       |
+| `JWT_SECRET`           | JWT signing secret           | Yes      | -       |
+| `JWT_REFRESH_SECRET`   | Refresh token secret         | Yes      | -       |
+| `REDIS_URL`            | Redis connection string      | Yes      | -       |
+| `EMAIL_HOST`           | SMTP host                    | Yes      | -       |
+| `EMAIL_USER`           | SMTP username                | Yes      | -       |
+| `EMAIL_PASSWORD`       | SMTP password                | Yes      | -       |
+| `HUGGING_FACE_API_KEY` | Hugging Face API key         | Yes      | -       |
+| `OPENAI_API_KEY`       | OpenAI API key               | No       | -       |
+| `PORT`                 | Server port                  | No       | 3001    |
 
 ### Frontend
 
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `NEXT_PUBLIC_API_URL` | Backend API URL | Yes | - |
-| `NEXT_PUBLIC_WS_URL` | WebSocket URL | Yes | - |
-| `NEXT_PUBLIC_APP_ENV` | Environment | No | development |
+| Variable              | Description     | Required | Default     |
+| --------------------- | --------------- | -------- | ----------- |
+| `NEXT_PUBLIC_API_URL` | Backend API URL | Yes      | -           |
+| `NEXT_PUBLIC_WS_URL`  | WebSocket URL   | Yes      | -           |
+| `NEXT_PUBLIC_APP_ENV` | Environment     | No       | development |
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
 **Database Connection Failed**
+
 ```bash
 # Check PostgreSQL is running
 pg_isready
@@ -386,6 +392,7 @@ echo $DATABASE_URL
 ```
 
 **Redis Connection Failed**
+
 ```bash
 # Check Redis is running
 redis-cli ping
@@ -394,6 +401,7 @@ redis-cli ping
 ```
 
 **Frontend Can't Connect to Backend**
+
 - Verify `NEXT_PUBLIC_API_URL` is correct
 - Check CORS configuration in backend
 - Ensure backend is running
