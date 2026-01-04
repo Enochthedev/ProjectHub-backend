@@ -1,124 +1,123 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class OptimizeAIAssistantIndexes1703800000000
-  implements MigrationInterface
-{
+  implements MigrationInterface {
   name = 'OptimizeAIAssistantIndexes1703800000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Conversation table indexes for AI assistant queries
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_conversations_student_status" 
+            CREATE INDEX IF NOT EXISTS "idx_conversations_student_status" 
             ON "conversations" ("student_id", "status") 
             WHERE "status" = 'active'
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_conversations_project_active" 
+            CREATE INDEX IF NOT EXISTS "idx_conversations_project_active" 
             ON "conversations" ("project_id", "status") 
             WHERE "project_id" IS NOT NULL AND "status" = 'active'
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_conversations_last_message" 
+            CREATE INDEX IF NOT EXISTS "idx_conversations_last_message" 
             ON "conversations" ("last_message_at" DESC) 
             WHERE "status" = 'active'
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_conversations_language_status" 
+            CREATE INDEX IF NOT EXISTS "idx_conversations_language_status" 
             ON "conversations" ("language", "status") 
             WHERE "status" = 'active'
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_conversations_context_gin" 
+            CREATE INDEX IF NOT EXISTS "idx_conversations_context_gin" 
             ON "conversations" USING GIN ("context") 
             WHERE "context" IS NOT NULL
         `);
 
     // Conversation messages indexes for performance
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_messages_conversation_created" 
+            CREATE INDEX IF NOT EXISTS "idx_messages_conversation_created" 
             ON "conversation_messages" ("conversation_id", "created_at" ASC)
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_messages_type_confidence" 
+            CREATE INDEX IF NOT EXISTS "idx_messages_type_confidence" 
             ON "conversation_messages" ("type", "confidence_score" DESC) 
             WHERE "confidence_score" IS NOT NULL
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_messages_bookmarked_user" 
+            CREATE INDEX IF NOT EXISTS "idx_messages_bookmarked_user" 
             ON "conversation_messages" ("conversation_id") 
             WHERE "is_bookmarked" = true
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_messages_ai_responses" 
+            CREATE INDEX IF NOT EXISTS "idx_messages_ai_responses" 
             ON "conversation_messages" ("type", "created_at" DESC) 
             WHERE "type" = 'ai_response'
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_messages_content_search" 
+            CREATE INDEX IF NOT EXISTS "idx_messages_content_search" 
             ON "conversation_messages" USING GIN (to_tsvector('english', "content")) 
             WHERE "type" IN ('user_query', 'ai_response')
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_messages_metadata_gin" 
+            CREATE INDEX IF NOT EXISTS "idx_messages_metadata_gin" 
             ON "conversation_messages" USING GIN ("metadata") 
             WHERE "metadata" IS NOT NULL
         `);
 
     // Knowledge base entries indexes for full-text search optimization
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_knowledge_category_active" 
+            CREATE INDEX IF NOT EXISTS "idx_knowledge_category_active" 
             ON "knowledge_base_entries" ("category", "is_active") 
             WHERE "is_active" = true
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_knowledge_content_type_lang" 
+            CREATE INDEX IF NOT EXISTS "idx_knowledge_content_type_lang" 
             ON "knowledge_base_entries" ("content_type", "language", "is_active") 
             WHERE "is_active" = true
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_knowledge_usage_rating" 
+            CREATE INDEX IF NOT EXISTS "idx_knowledge_usage_rating" 
             ON "knowledge_base_entries" ("usage_count" DESC, "average_rating" DESC) 
             WHERE "is_active" = true
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_knowledge_tags_gin" 
+            CREATE INDEX IF NOT EXISTS "idx_knowledge_tags_gin" 
             ON "knowledge_base_entries" USING GIN ("tags") 
             WHERE "is_active" = true
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_knowledge_keywords_gin" 
+            CREATE INDEX IF NOT EXISTS "idx_knowledge_keywords_gin" 
             ON "knowledge_base_entries" USING GIN ("keywords") 
             WHERE "is_active" = true
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_knowledge_created_by_date" 
+            CREATE INDEX IF NOT EXISTS "idx_knowledge_created_by_date" 
             ON "knowledge_base_entries" ("created_by", "created_at" DESC) 
             WHERE "is_active" = true
         `);
 
     // Composite index for complex AI assistant queries
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_conversations_complex_search" 
+            CREATE INDEX IF NOT EXISTS "idx_conversations_complex_search" 
             ON "conversations" ("student_id", "status", "language", "last_message_at" DESC) 
             WHERE "status" IN ('active', 'escalated')
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_messages_ai_analysis" 
+            CREATE INDEX IF NOT EXISTS "idx_messages_ai_analysis" 
             ON "conversation_messages" ("type", "confidence_score", "average_rating", "created_at" DESC) 
             WHERE "type" = 'ai_response' AND "confidence_score" IS NOT NULL
         `);
@@ -154,7 +153,7 @@ export class OptimizeAIAssistantIndexes1703800000000
         `);
 
     await queryRunner.query(`
-            CREATE INDEX CONCURRENTLY "knowledge_search_idx" 
+            CREATE INDEX "knowledge_search_idx" 
             ON "knowledge_base_entries" USING GIN ("search_vector") 
             WHERE "is_active" = true;
         `);
@@ -198,65 +197,65 @@ export class OptimizeAIAssistantIndexes1703800000000
 
     // Drop conversation indexes
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_conversations_student_status";`,
+      `DROP INDEX IF EXISTS "idx_conversations_student_status";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_conversations_project_active";`,
+      `DROP INDEX IF EXISTS "idx_conversations_project_active";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_conversations_last_message";`,
+      `DROP INDEX IF EXISTS "idx_conversations_last_message";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_conversations_language_status";`,
+      `DROP INDEX IF EXISTS "idx_conversations_language_status";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_conversations_context_gin";`,
+      `DROP INDEX IF EXISTS "idx_conversations_context_gin";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_conversations_complex_search";`,
+      `DROP INDEX IF EXISTS "idx_conversations_complex_search";`,
     );
 
     // Drop message indexes
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_messages_conversation_created";`,
+      `DROP INDEX IF EXISTS "idx_messages_conversation_created";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_messages_type_confidence";`,
+      `DROP INDEX IF EXISTS "idx_messages_type_confidence";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_messages_bookmarked_user";`,
+      `DROP INDEX IF EXISTS "idx_messages_bookmarked_user";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_messages_ai_responses";`,
+      `DROP INDEX IF EXISTS "idx_messages_ai_responses";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_messages_content_search";`,
+      `DROP INDEX IF EXISTS "idx_messages_content_search";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_messages_metadata_gin";`,
+      `DROP INDEX IF EXISTS "idx_messages_metadata_gin";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_messages_ai_analysis";`,
+      `DROP INDEX IF EXISTS "idx_messages_ai_analysis";`,
     );
 
     // Drop knowledge base indexes
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_knowledge_category_active";`,
+      `DROP INDEX IF EXISTS "idx_knowledge_category_active";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_knowledge_content_type_lang";`,
+      `DROP INDEX IF EXISTS "idx_knowledge_content_type_lang";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_knowledge_usage_rating";`,
+      `DROP INDEX IF EXISTS "idx_knowledge_usage_rating";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_knowledge_tags_gin";`,
+      `DROP INDEX IF EXISTS "idx_knowledge_tags_gin";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_knowledge_keywords_gin";`,
+      `DROP INDEX IF EXISTS "idx_knowledge_keywords_gin";`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "idx_knowledge_created_by_date";`,
+      `DROP INDEX IF EXISTS "idx_knowledge_created_by_date";`,
     );
 
     // Drop search vector trigger and function
@@ -267,7 +266,7 @@ export class OptimizeAIAssistantIndexes1703800000000
       `DROP FUNCTION IF EXISTS update_knowledge_search_vector();`,
     );
     await queryRunner.query(
-      `DROP INDEX CONCURRENTLY IF EXISTS "knowledge_search_idx";`,
+      `DROP INDEX IF EXISTS "knowledge_search_idx";`,
     );
   }
 }

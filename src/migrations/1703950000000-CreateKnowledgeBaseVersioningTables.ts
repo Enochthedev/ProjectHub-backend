@@ -1,8 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateKnowledgeBaseVersioningTables1703950000000
-  implements MigrationInterface
-{
+  implements MigrationInterface {
   name = 'CreateKnowledgeBaseVersioningTables1703950000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -15,14 +14,6 @@ export class CreateKnowledgeBaseVersioningTables1703950000000
             )
         `);
 
-    await queryRunner.query(`
-            CREATE TYPE "approval_status_enum" AS ENUM (
-                'pending',
-                'approved',
-                'rejected',
-                'needs_revision'
-            )
-        `);
 
     await queryRunner.query(`
             CREATE TYPE "approval_action_enum" AS ENUM (

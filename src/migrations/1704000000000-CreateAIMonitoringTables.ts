@@ -1,13 +1,12 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateAIMonitoringTables1704000000000
-  implements MigrationInterface
-{
-  name = 'CreateAIMonitoringTables1704000000000';
+    implements MigrationInterface {
+    name = 'CreateAIMonitoringTables1704000000000';
 
-  public async up(queryRunner: QueryRunner): Promise<void> {
-    // Create enum types
-    await queryRunner.query(`
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        // Create enum types
+        await queryRunner.query(`
             CREATE TYPE "metric_type_enum" AS ENUM (
                 'response_time',
                 'success_rate',
@@ -18,7 +17,7 @@ export class CreateAIMonitoringTables1704000000000
             )
         `);
 
-    await queryRunner.query(`
+        await queryRunner.query(`
             CREATE TYPE "alert_severity_enum" AS ENUM (
                 'low',
                 'medium',
@@ -27,7 +26,7 @@ export class CreateAIMonitoringTables1704000000000
             )
         `);
 
-    await queryRunner.query(`
+        await queryRunner.query(`
             CREATE TYPE "alert_condition_enum" AS ENUM (
                 'greater_than',
                 'less_than',
@@ -38,7 +37,7 @@ export class CreateAIMonitoringTables1704000000000
             )
         `);
 
-    await queryRunner.query(`
+        await queryRunner.query(`
             CREATE TYPE "alert_status_enum" AS ENUM (
                 'active',
                 'resolved',
@@ -47,8 +46,8 @@ export class CreateAIMonitoringTables1704000000000
             )
         `);
 
-    // Create ai_alert_rules table
-    await queryRunner.query(`
+        // Create ai_alert_rules table
+        await queryRunner.query(`
             CREATE TABLE "ai_alert_rules" (
                 "id" uuid NOT NULL DEFAULT gen_random_uuid(),
                 "name" character varying(100) NOT NULL,
@@ -65,8 +64,8 @@ export class CreateAIMonitoringTables1704000000000
                 "last_triggered" TIMESTAMP,
                 "trigger_count" integer NOT NULL DEFAULT 0,
                 "metadata" jsonb,
-                "created_by" uuid NOT NULL,
-                "updated_by" uuid NOT NULL,
+                "created_by" uuid,
+                "updated_by" uuid,
                 "created_at" TIMESTAMP NOT NULL DEFAULT now(),
                 "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
                 CONSTRAINT "PK_ai_alert_rules" PRIMARY KEY ("id"),
@@ -76,8 +75,8 @@ export class CreateAIMonitoringTables1704000000000
             )
         `);
 
-    // Create ai_alerts table
-    await queryRunner.query(`
+        // Create ai_alerts table
+        await queryRunner.query(`
             CREATE TABLE "ai_alerts" (
                 "id" uuid NOT NULL DEFAULT gen_random_uuid(),
                 "rule_id" uuid NOT NULL,
@@ -107,49 +106,49 @@ export class CreateAIMonitoringTables1704000000000
             )
         `);
 
-    // Create indexes for performance
-    await queryRunner.query(`
+        // Create indexes for performance
+        await queryRunner.query(`
             CREATE INDEX "IDX_ai_alert_rules_service_id_is_enabled" 
             ON "ai_alert_rules" ("service_id", "is_enabled")
         `);
 
-    await queryRunner.query(`
+        await queryRunner.query(`
             CREATE INDEX "IDX_ai_alert_rules_metric_type_is_enabled" 
             ON "ai_alert_rules" ("metric_type", "is_enabled")
         `);
 
-    await queryRunner.query(`
+        await queryRunner.query(`
             CREATE INDEX "IDX_ai_alert_rules_severity_is_enabled" 
             ON "ai_alert_rules" ("severity", "is_enabled")
         `);
 
-    await queryRunner.query(`
+        await queryRunner.query(`
             CREATE INDEX "IDX_ai_alerts_service_id_status" 
             ON "ai_alerts" ("service_id", "status")
         `);
 
-    await queryRunner.query(`
+        await queryRunner.query(`
             CREATE INDEX "IDX_ai_alerts_severity_status" 
             ON "ai_alerts" ("severity", "status")
         `);
 
-    await queryRunner.query(`
+        await queryRunner.query(`
             CREATE INDEX "IDX_ai_alerts_triggered_at_status" 
             ON "ai_alerts" ("triggered_at", "status")
         `);
 
-    await queryRunner.query(`
+        await queryRunner.query(`
             CREATE INDEX "IDX_ai_alerts_rule_id_status" 
             ON "ai_alerts" ("rule_id", "status")
         `);
 
-    await queryRunner.query(`
+        await queryRunner.query(`
             CREATE INDEX "IDX_ai_alerts_status_triggered_at" 
             ON "ai_alerts" ("status", "triggered_at")
         `);
 
-    // Insert default alert rules for existing AI services
-    await queryRunner.query(`
+        // Insert default alert rules for existing AI services
+        await queryRunner.query(`
             INSERT INTO "ai_alert_rules" (
                 "name",
                 "service_id",
@@ -166,8 +165,8 @@ export class CreateAIMonitoringTables1704000000000
                 "updated_by"
             )
             SELECT 
-                'High Response Time - ' || asc.name,
-                asc.id,
+                'High Response Time - ' || configs.name,
+                configs.id,
                 'response_time',
                 'greater_than',
                 5000,
@@ -177,13 +176,13 @@ export class CreateAIMonitoringTables1704000000000
                 15,
                 true,
                 '{"email"}',
-                COALESCE(asc.created_by, (SELECT id FROM users WHERE role = 'admin' LIMIT 1)),
-                COALESCE(asc.updated_by, (SELECT id FROM users WHERE role = 'admin' LIMIT 1))
-            FROM ai_service_configs asc
-            WHERE asc.is_active = true
+                COALESCE(configs.created_by, (SELECT id FROM users WHERE role = 'admin' LIMIT 1)),
+                COALESCE(configs.updated_by, (SELECT id FROM users WHERE role = 'admin' LIMIT 1))
+            FROM ai_service_configs configs
+            WHERE configs.is_active = true
         `);
 
-    await queryRunner.query(`
+        await queryRunner.query(`
             INSERT INTO "ai_alert_rules" (
                 "name",
                 "service_id",
@@ -200,8 +199,8 @@ export class CreateAIMonitoringTables1704000000000
                 "updated_by"
             )
             SELECT 
-                'Low Success Rate - ' || asc.name,
-                asc.id,
+                'Low Success Rate - ' || configs.name,
+                configs.id,
                 'success_rate',
                 'less_than',
                 90,
@@ -211,13 +210,13 @@ export class CreateAIMonitoringTables1704000000000
                 30,
                 true,
                 '{"email", "slack"}',
-                COALESCE(asc.created_by, (SELECT id FROM users WHERE role = 'admin' LIMIT 1)),
-                COALESCE(asc.updated_by, (SELECT id FROM users WHERE role = 'admin' LIMIT 1))
-            FROM ai_service_configs asc
-            WHERE asc.is_active = true
+                COALESCE(configs.created_by, (SELECT id FROM users WHERE role = 'admin' LIMIT 1)),
+                COALESCE(configs.updated_by, (SELECT id FROM users WHERE role = 'admin' LIMIT 1))
+            FROM ai_service_configs configs
+            WHERE configs.is_active = true
         `);
 
-    await queryRunner.query(`
+        await queryRunner.query(`
             INSERT INTO "ai_alert_rules" (
                 "name",
                 "service_id",
@@ -234,8 +233,8 @@ export class CreateAIMonitoringTables1704000000000
                 "updated_by"
             )
             SELECT 
-                'High Error Rate - ' || asc.name,
-                asc.id,
+                'High Error Rate - ' || configs.name,
+                configs.id,
                 'error_rate',
                 'greater_than',
                 10,
@@ -245,48 +244,48 @@ export class CreateAIMonitoringTables1704000000000
                 15,
                 true,
                 '{"email"}',
-                COALESCE(asc.created_by, (SELECT id FROM users WHERE role = 'admin' LIMIT 1)),
-                COALESCE(asc.updated_by, (SELECT id FROM users WHERE role = 'admin' LIMIT 1))
-            FROM ai_service_configs asc
-            WHERE asc.is_active = true
+                COALESCE(configs.created_by, (SELECT id FROM users WHERE role = 'admin' LIMIT 1)),
+                COALESCE(configs.updated_by, (SELECT id FROM users WHERE role = 'admin' LIMIT 1))
+            FROM ai_service_configs configs
+            WHERE configs.is_active = true
         `);
-  }
+    }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
-    // Drop indexes
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_ai_alerts_status_triggered_at"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_ai_alerts_rule_id_status"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_ai_alerts_triggered_at_status"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_ai_alerts_severity_status"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_ai_alerts_service_id_status"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_ai_alert_rules_severity_is_enabled"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_ai_alert_rules_metric_type_is_enabled"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_ai_alert_rules_service_id_is_enabled"`,
-    );
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        // Drop indexes
+        await queryRunner.query(
+            `DROP INDEX IF EXISTS "IDX_ai_alerts_status_triggered_at"`,
+        );
+        await queryRunner.query(
+            `DROP INDEX IF EXISTS "IDX_ai_alerts_rule_id_status"`,
+        );
+        await queryRunner.query(
+            `DROP INDEX IF EXISTS "IDX_ai_alerts_triggered_at_status"`,
+        );
+        await queryRunner.query(
+            `DROP INDEX IF EXISTS "IDX_ai_alerts_severity_status"`,
+        );
+        await queryRunner.query(
+            `DROP INDEX IF EXISTS "IDX_ai_alerts_service_id_status"`,
+        );
+        await queryRunner.query(
+            `DROP INDEX IF EXISTS "IDX_ai_alert_rules_severity_is_enabled"`,
+        );
+        await queryRunner.query(
+            `DROP INDEX IF EXISTS "IDX_ai_alert_rules_metric_type_is_enabled"`,
+        );
+        await queryRunner.query(
+            `DROP INDEX IF EXISTS "IDX_ai_alert_rules_service_id_is_enabled"`,
+        );
 
-    // Drop tables
-    await queryRunner.query(`DROP TABLE IF EXISTS "ai_alerts"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "ai_alert_rules"`);
+        // Drop tables
+        await queryRunner.query(`DROP TABLE IF EXISTS "ai_alerts"`);
+        await queryRunner.query(`DROP TABLE IF EXISTS "ai_alert_rules"`);
 
-    // Drop enum types
-    await queryRunner.query(`DROP TYPE IF EXISTS "alert_status_enum"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "alert_condition_enum"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "alert_severity_enum"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "metric_type_enum"`);
-  }
+        // Drop enum types
+        await queryRunner.query(`DROP TYPE IF EXISTS "alert_status_enum"`);
+        await queryRunner.query(`DROP TYPE IF EXISTS "alert_condition_enum"`);
+        await queryRunner.query(`DROP TYPE IF EXISTS "alert_severity_enum"`);
+        await queryRunner.query(`DROP TYPE IF EXISTS "metric_type_enum"`);
+    }
 }

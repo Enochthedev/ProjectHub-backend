@@ -1,8 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class OptimizeMilestoneIndexes1703600000000
-  implements MigrationInterface
-{
+  implements MigrationInterface {
   name = 'OptimizeMilestoneIndexes1703600000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -38,7 +37,7 @@ export class OptimizeMilestoneIndexes1703600000000
     await queryRunner.query(`
             CREATE INDEX IF NOT EXISTS "idx_milestones_overdue" 
             ON "milestones" ("student_id", "due_date", "priority") 
-            WHERE "due_date" < CURRENT_DATE AND "status" NOT IN ('completed', 'cancelled')
+            WHERE "status" NOT IN ('completed', 'cancelled')
         `);
 
     // Partial index for blocked milestones
@@ -100,8 +99,7 @@ export class OptimizeMilestoneIndexes1703600000000
     await queryRunner.query(`
             CREATE INDEX IF NOT EXISTS "idx_milestones_risk_analysis" 
             ON "milestones" ("student_id", "status", "due_date") 
-            WHERE ("status" = 'blocked' OR "due_date" < CURRENT_DATE) 
-            AND "status" NOT IN ('completed', 'cancelled')
+            WHERE "status" NOT IN ('completed', 'cancelled')
         `);
 
     // Index for progress velocity calculations
