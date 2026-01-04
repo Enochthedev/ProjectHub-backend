@@ -12,7 +12,7 @@ export default registerAs(
     database: process.env.DATABASE_NAME || 'fyp_platform',
     entities: [__dirname + '/../**/*.entity{.ts,.js}'],
     migrations: [__dirname + '/../migrations/*{.ts,.js}'],
-    synchronize: process.env.NODE_ENV === 'development',
+    synchronize: false,
     logging: process.env.NODE_ENV === 'development',
     ssl: false,
     // Connection retry configuration

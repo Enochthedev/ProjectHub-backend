@@ -1,456 +1,163 @@
-import { MigrationInterface, QueryRunner, Table, Index } from 'typeorm';
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateSupervisorManagementTables1704100000000 implements MigrationInterface {
     name = 'CreateSupervisorManagementTables1704100000000';
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        // Create supervisor_analytics table
-        await queryRunner.createTable(
-            new Table({
-                name: 'supervisor_analytics',
-                columns: [
-                    {
-                        name: 'id',
-                        type: 'uuid',
-                        isPrimary: true,
-                        generationStrategy: 'uuid',
-                        default: 'uuid_generate_v4()',
-                    },
-                    {
-                        name: 'supervisorId',
-                        type: 'uuid',
-                        isNullable: false,
-                    },
-                    {
-                        name: 'metricType',
-                        type: 'varchar',
-                        length: '50',
-                        isNullable: false,
-                    },
-                    {
-                        name: 'value',
-                        type: 'decimal',
-                        precision: 10,
-                        scale: 2,
-                        isNullable: false,
-                    },
-                    {
-                        name: 'periodStart',
-                        type: 'date',
-                        isNullable: false,
-                    },
-                    {
-                        name: 'periodEnd',
-                        type: 'date',
-                        isNullable: false,
-                    },
-                    {
-                        name: 'metadata',
-                        type: 'jsonb',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'createdAt',
-                        type: 'timestamp',
-                        default: 'CURRENT_TIMESTAMP',
-                    },
-                    {
-                        name: 'updatedAt',
-                        type: 'timestamp',
-                        default: 'CURRENT_TIMESTAMP',
-                    },
-                ],
-                foreignKeys: [
-                    {
-                        columnNames: ['supervisorId'],
-                        referencedTableName: 'users',
-                        referencedColumnNames: ['id'],
-                        onDelete: 'CASCADE',
-                    },
-                ],
-            }),
-            true,
-        );
-
-        // Create index for supervisor_analytics
+        // Enums
         await queryRunner.query(`
-            CREATE INDEX IF NOT EXISTS "IDX_supervisor_analytics_supervisor_metric_period" 
+            CREATE TYPE "supervisor_availability_type_enum" AS ENUM ('office_hours', 'meeting_slots', 'unavailable')
+        `);
+        await queryRunner.query(`
+            CREATE TYPE "ai_review_status_enum" AS ENUM ('pending', 'approved', 'escalated', 'flagged', 'resolved')
+        `);
+        await queryRunner.query(`
+            CREATE TYPE "ai_review_category_enum" AS ENUM ('accuracy', 'appropriateness', 'completeness', 'safety', 'policy_violation')
+        `);
+        await queryRunner.query(`
+            CREATE TYPE "report_type_enum" AS ENUM ('student_progress', 'milestone_summary', 'ai_interaction_summary', 'performance_analytics', 'custom')
+        `);
+        await queryRunner.query(`
+            CREATE TYPE "report_format_enum" AS ENUM ('pdf', 'csv', 'json')
+        `);
+        await queryRunner.query(`
+            CREATE TYPE "report_status_enum" AS ENUM ('generating', 'completed', 'failed', 'expired')
+        `);
+
+        // supervisor_analytics
+        await queryRunner.query(`
+            CREATE TABLE "supervisor_analytics" (
+                "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+                "supervisorId" uuid NOT NULL,
+                "metricType" character varying(50) NOT NULL,
+                "value" decimal(10,2) NOT NULL,
+                "periodStart" date NOT NULL,
+                "periodEnd" date NOT NULL,
+                "metadata" jsonb,
+                "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+                "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+                CONSTRAINT "PK_supervisor_analytics" PRIMARY KEY ("id"),
+                CONSTRAINT "FK_supervisor_analytics_supervisorId" FOREIGN KEY ("supervisorId") REFERENCES "users"("id") ON DELETE CASCADE
+            )
+        `);
+        // Index
+        await queryRunner.query(`
+            CREATE INDEX "IDX_supervisor_analytics_supervisor_metric_period" 
             ON "supervisor_analytics" ("supervisorId", "metricType", "periodStart")
         `);
 
-        // Create supervisor_availability table
-        await queryRunner.createTable(
-            new Table({
-                name: 'supervisor_availability',
-                columns: [
-                    {
-                        name: 'id',
-                        type: 'uuid',
-                        isPrimary: true,
-                        generationStrategy: 'uuid',
-                        default: 'uuid_generate_v4()',
-                    },
-                    {
-                        name: 'supervisorId',
-                        type: 'uuid',
-                        isNullable: false,
-                    },
-                    {
-                        name: 'type',
-                        type: 'enum',
-                        enum: ['office_hours', 'meeting_slots', 'unavailable'],
-                        default: "'office_hours'",
-                    },
-                    {
-                        name: 'dayOfWeek',
-                        type: 'int',
-                        isNullable: false,
-                    },
-                    {
-                        name: 'startTime',
-                        type: 'time',
-                        isNullable: false,
-                    },
-                    {
-                        name: 'endTime',
-                        type: 'time',
-                        isNullable: false,
-                    },
-                    {
-                        name: 'location',
-                        type: 'varchar',
-                        length: '255',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'notes',
-                        type: 'text',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'maxCapacity',
-                        type: 'int',
-                        default: 1,
-                    },
-                    {
-                        name: 'isActive',
-                        type: 'boolean',
-                        default: true,
-                    },
-                    {
-                        name: 'effectiveFrom',
-                        type: 'date',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'effectiveUntil',
-                        type: 'date',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'createdAt',
-                        type: 'timestamp',
-                        default: 'CURRENT_TIMESTAMP',
-                    },
-                    {
-                        name: 'updatedAt',
-                        type: 'timestamp',
-                        default: 'CURRENT_TIMESTAMP',
-                    },
-                ],
-                foreignKeys: [
-                    {
-                        columnNames: ['supervisorId'],
-                        referencedTableName: 'users',
-                        referencedColumnNames: ['id'],
-                        onDelete: 'CASCADE',
-                    },
-                ],
-            }),
-            true,
-        );
-
-        // Create index for supervisor_availability
+        // supervisor_availability
         await queryRunner.query(`
-            CREATE INDEX IF NOT EXISTS "IDX_supervisor_availability_supervisor_day_time" 
+            CREATE TABLE "supervisor_availability" (
+                "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+                "supervisorId" uuid NOT NULL,
+                "type" "supervisor_availability_type_enum" NOT NULL DEFAULT 'office_hours',
+                "dayOfWeek" integer NOT NULL,
+                "startTime" time NOT NULL,
+                "endTime" time NOT NULL,
+                "location" character varying(255),
+                "notes" text,
+                "maxCapacity" integer DEFAULT 1,
+                "isActive" boolean DEFAULT true,
+                "effectiveFrom" date,
+                "effectiveUntil" date,
+                "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+                "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+                CONSTRAINT "PK_supervisor_availability" PRIMARY KEY ("id"),
+                CONSTRAINT "FK_supervisor_availability_supervisorId" FOREIGN KEY ("supervisorId") REFERENCES "users"("id") ON DELETE CASCADE
+            )
+        `);
+        // Index
+        await queryRunner.query(`
+            CREATE INDEX "IDX_supervisor_availability_supervisor_day_time" 
             ON "supervisor_availability" ("supervisorId", "dayOfWeek", "startTime")
         `);
 
-        // Create ai_interaction_reviews table
-        await queryRunner.createTable(
-            new Table({
-                name: 'ai_interaction_reviews',
-                columns: [
-                    {
-                        name: 'id',
-                        type: 'uuid',
-                        isPrimary: true,
-                        generationStrategy: 'uuid',
-                        default: 'uuid_generate_v4()',
-                    },
-                    {
-                        name: 'conversationId',
-                        type: 'uuid',
-                        isNullable: false,
-                    },
-                    {
-                        name: 'supervisorId',
-                        type: 'uuid',
-                        isNullable: false,
-                    },
-                    {
-                        name: 'studentId',
-                        type: 'uuid',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'status',
-                        type: 'enum',
-                        enum: ['pending', 'approved', 'escalated', 'flagged', 'resolved'],
-                        default: "'pending'",
-                    },
-                    {
-                        name: 'categories',
-                        type: 'enum',
-                        enum: ['accuracy', 'appropriateness', 'completeness', 'safety', 'policy_violation'],
-                        isArray: true,
-                        default: 'ARRAY[]::text[]',
-                    },
-                    {
-                        name: 'confidenceScore',
-                        type: 'decimal',
-                        precision: 3,
-                        scale: 2,
-                        isNullable: true,
-                    },
-                    {
-                        name: 'reviewNotes',
-                        type: 'text',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'supervisorFeedback',
-                        type: 'text',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'aiResponseMetadata',
-                        type: 'jsonb',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'requiresFollowUp',
-                        type: 'boolean',
-                        default: false,
-                    },
-                    {
-                        name: 'reviewedAt',
-                        type: 'timestamp',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'resolvedAt',
-                        type: 'timestamp',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'createdAt',
-                        type: 'timestamp',
-                        default: 'CURRENT_TIMESTAMP',
-                    },
-                    {
-                        name: 'updatedAt',
-                        type: 'timestamp',
-                        default: 'CURRENT_TIMESTAMP',
-                    },
-                ],
-                foreignKeys: [
-                    {
-                        columnNames: ['conversationId'],
-                        referencedTableName: 'conversations',
-                        referencedColumnNames: ['id'],
-                        onDelete: 'CASCADE',
-                    },
-                    {
-                        columnNames: ['supervisorId'],
-                        referencedTableName: 'users',
-                        referencedColumnNames: ['id'],
-                        onDelete: 'CASCADE',
-                    },
-                    {
-                        columnNames: ['studentId'],
-                        referencedTableName: 'users',
-                        referencedColumnNames: ['id'],
-                        onDelete: 'CASCADE',
-                    },
-                ],
-            }),
-            true,
-        );
-
-        // Create indexes for ai_interaction_reviews
+        // ai_interaction_reviews
         await queryRunner.query(`
-            CREATE INDEX IF NOT EXISTS "IDX_ai_interaction_reviews_supervisor_status_created" 
+            CREATE TABLE "ai_interaction_reviews" (
+                "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+                "conversationId" uuid NOT NULL,
+                "supervisorId" uuid NOT NULL,
+                "studentId" uuid,
+                "status" "ai_review_status_enum" NOT NULL DEFAULT 'pending',
+                "categories" "ai_review_category_enum"[] DEFAULT '{}',
+                "confidenceScore" decimal(3,2),
+                "reviewNotes" text,
+                "supervisorFeedback" text,
+                "aiResponseMetadata" jsonb,
+                "requiresFollowUp" boolean DEFAULT false,
+                "reviewedAt" TIMESTAMP,
+                "resolvedAt" TIMESTAMP,
+                "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+                "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+                CONSTRAINT "PK_ai_interaction_reviews" PRIMARY KEY ("id"),
+                CONSTRAINT "FK_ai_interaction_reviews_conversationId" FOREIGN KEY ("conversationId") REFERENCES "conversations"("id") ON DELETE CASCADE,
+                CONSTRAINT "FK_ai_interaction_reviews_supervisorId" FOREIGN KEY ("supervisorId") REFERENCES "users"("id") ON DELETE CASCADE,
+                CONSTRAINT "FK_ai_interaction_reviews_studentId" FOREIGN KEY ("studentId") REFERENCES "users"("id") ON DELETE CASCADE
+            )
+        `);
+        // Indexes
+        await queryRunner.query(`
+            CREATE INDEX "IDX_ai_interaction_reviews_supervisor_status_created" 
             ON "ai_interaction_reviews" ("supervisorId", "status", "createdAt")
         `);
-
         await queryRunner.query(`
-            CREATE INDEX IF NOT EXISTS "IDX_ai_interaction_reviews_conversation_status" 
+            CREATE INDEX "IDX_ai_interaction_reviews_conversation_status" 
             ON "ai_interaction_reviews" ("conversationId", "status")
         `);
 
-        // Create supervisor_reports table
-        await queryRunner.createTable(
-            new Table({
-                name: 'supervisor_reports',
-                columns: [
-                    {
-                        name: 'id',
-                        type: 'uuid',
-                        isPrimary: true,
-                        generationStrategy: 'uuid',
-                        default: 'uuid_generate_v4()',
-                    },
-                    {
-                        name: 'supervisorId',
-                        type: 'uuid',
-                        isNullable: false,
-                    },
-                    {
-                        name: 'type',
-                        type: 'enum',
-                        enum: ['student_progress', 'milestone_summary', 'ai_interaction_summary', 'performance_analytics', 'custom'],
-                        default: "'student_progress'",
-                    },
-                    {
-                        name: 'format',
-                        type: 'enum',
-                        enum: ['pdf', 'csv', 'json'],
-                        default: "'pdf'",
-                    },
-                    {
-                        name: 'status',
-                        type: 'enum',
-                        enum: ['generating', 'completed', 'failed', 'expired'],
-                        default: "'generating'",
-                    },
-                    {
-                        name: 'title',
-                        type: 'varchar',
-                        length: '255',
-                        isNullable: false,
-                    },
-                    {
-                        name: 'description',
-                        type: 'text',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'filters',
-                        type: 'jsonb',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'parameters',
-                        type: 'jsonb',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'filename',
-                        type: 'varchar',
-                        length: '255',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'filePath',
-                        type: 'varchar',
-                        length: '255',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'mimeType',
-                        type: 'varchar',
-                        length: '100',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'fileSize',
-                        type: 'bigint',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'generatedAt',
-                        type: 'timestamp',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'expiresAt',
-                        type: 'timestamp',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'downloadCount',
-                        type: 'int',
-                        default: 0,
-                    },
-                    {
-                        name: 'lastDownloadedAt',
-                        type: 'timestamp',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'errorMessage',
-                        type: 'text',
-                        isNullable: true,
-                    },
-                    {
-                        name: 'createdAt',
-                        type: 'timestamp',
-                        default: 'CURRENT_TIMESTAMP',
-                    },
-                    {
-                        name: 'updatedAt',
-                        type: 'timestamp',
-                        default: 'CURRENT_TIMESTAMP',
-                    },
-                ],
-                foreignKeys: [
-                    {
-                        columnNames: ['supervisorId'],
-                        referencedTableName: 'users',
-                        referencedColumnNames: ['id'],
-                        onDelete: 'CASCADE',
-                    },
-                ],
-            }),
-            true,
-        );
-
-        // Create indexes for supervisor_reports
+        // supervisor_reports
         await queryRunner.query(`
-            CREATE INDEX IF NOT EXISTS "IDX_supervisor_reports_supervisor_type_created" 
+            CREATE TABLE "supervisor_reports" (
+                "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+                "supervisorId" uuid NOT NULL,
+                "type" "report_type_enum" NOT NULL DEFAULT 'student_progress',
+                "format" "report_format_enum" NOT NULL DEFAULT 'pdf',
+                "status" "report_status_enum" NOT NULL DEFAULT 'generating',
+                "title" character varying(255) NOT NULL,
+                "description" text,
+                "filters" jsonb,
+                "parameters" jsonb,
+                "filename" character varying(255),
+                "filePath" character varying(255),
+                "mimeType" character varying(100),
+                "fileSize" bigint,
+                "generatedAt" TIMESTAMP,
+                "expiresAt" TIMESTAMP,
+                "downloadCount" integer DEFAULT 0,
+                "lastDownloadedAt" TIMESTAMP,
+                "errorMessage" text,
+                "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+                "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+                CONSTRAINT "PK_supervisor_reports" PRIMARY KEY ("id"),
+                CONSTRAINT "FK_supervisor_reports_supervisorId" FOREIGN KEY ("supervisorId") REFERENCES "users"("id") ON DELETE CASCADE
+            )
+        `);
+        // Indexes
+        await queryRunner.query(`
+            CREATE INDEX "IDX_supervisor_reports_supervisor_type_created" 
             ON "supervisor_reports" ("supervisorId", "type", "createdAt")
         `);
-
         await queryRunner.query(`
-            CREATE INDEX IF NOT EXISTS "IDX_supervisor_reports_status_created" 
+            CREATE INDEX "IDX_supervisor_reports_status_created" 
             ON "supervisor_reports" ("status", "createdAt")
         `);
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        // Drop indexes first
-        await queryRunner.query('DROP INDEX IF EXISTS "IDX_supervisor_reports_status_created"');
-        await queryRunner.query('DROP INDEX IF EXISTS "IDX_supervisor_reports_supervisor_type_created"');
-        await queryRunner.query('DROP INDEX IF EXISTS "IDX_ai_interaction_reviews_conversation_status"');
-        await queryRunner.query('DROP INDEX IF EXISTS "IDX_ai_interaction_reviews_supervisor_status_created"');
-        await queryRunner.query('DROP INDEX IF EXISTS "IDX_supervisor_availability_supervisor_day_time"');
-        await queryRunner.query('DROP INDEX IF EXISTS "IDX_supervisor_analytics_supervisor_metric_period"');
-
         // Drop tables
-        await queryRunner.dropTable('supervisor_reports');
-        await queryRunner.dropTable('ai_interaction_reviews');
-        await queryRunner.dropTable('supervisor_availability');
-        await queryRunner.dropTable('supervisor_analytics');
+        await queryRunner.query('DROP TABLE IF EXISTS "supervisor_reports"');
+        await queryRunner.query('DROP TABLE IF EXISTS "ai_interaction_reviews"');
+        await queryRunner.query('DROP TABLE IF EXISTS "supervisor_availability"');
+        await queryRunner.query('DROP TABLE IF EXISTS "supervisor_analytics"');
+
+        // Drop enums
+        await queryRunner.query('DROP TYPE IF EXISTS "report_status_enum"');
+        await queryRunner.query('DROP TYPE IF EXISTS "report_format_enum"');
+        await queryRunner.query('DROP TYPE IF EXISTS "report_type_enum"');
+        await queryRunner.query('DROP TYPE IF EXISTS "ai_review_category_enum"');
+        await queryRunner.query('DROP TYPE IF EXISTS "ai_review_status_enum"');
+        await queryRunner.query('DROP TYPE IF EXISTS "supervisor_availability_type_enum"');
     }
 }

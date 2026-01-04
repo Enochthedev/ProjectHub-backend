@@ -1,11 +1,20 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateSharedMilestoneTables1703400000000
-  implements MigrationInterface
-{
+  implements MigrationInterface {
   name = 'CreateSharedMilestoneTables1703400000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Create milestone_status_enum type
+    await queryRunner.query(`
+        CREATE TYPE "milestone_status_enum" AS ENUM('not_started', 'in_progress', 'completed', 'blocked', 'cancelled')
+    `);
+
+    // Create priority_enum type
+    await queryRunner.query(`
+        CREATE TYPE "priority_enum" AS ENUM('low', 'medium', 'high', 'critical')
+    `);
+
     // Create shared_milestones table
     await queryRunner.query(`
             CREATE TABLE "shared_milestones" (
@@ -205,5 +214,9 @@ export class CreateSharedMilestoneTables1703400000000
     await queryRunner.query(`DROP TABLE "shared_milestone_assignees"`);
     await queryRunner.query(`DROP TABLE "shared_milestone_assignments"`);
     await queryRunner.query(`DROP TABLE "shared_milestones"`);
+
+    // Drop enum types
+    await queryRunner.query(`DROP TYPE "priority_enum"`);
+    await queryRunner.query(`DROP TYPE "milestone_status_enum"`);
   }
 }

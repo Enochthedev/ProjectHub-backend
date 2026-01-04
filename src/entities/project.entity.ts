@@ -62,7 +62,7 @@ export class Project {
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
-  @ManyToOne(() => User, { eager: true })
+  @ManyToOne(() => User)
   @JoinColumn({ name: 'supervisor_id' })
   supervisor: User;
 
@@ -73,7 +73,7 @@ export class Project {
   @JoinColumn({ name: 'student_id' })
   student: User | null;
 
-  @Column({ name: 'student_id', nullable: true })
+  @Column({ name: 'student_id', nullable: true, insert: false, update: false })
   studentId: string | null;
 
   @OneToMany(() => ProjectBookmark, (bookmark) => bookmark.project)

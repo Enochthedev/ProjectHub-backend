@@ -17,7 +17,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-projecthub}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-projecthub}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,7 +35,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -55,7 +55,7 @@ services:
     environment:
       QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-}
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:6333/health || exit 1"]
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:6333/health || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -71,6 +71,7 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
+      - "${WS_PORT:-3002}:${WS_PORT:-3002}"
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 3000
@@ -91,10 +92,10 @@ services:
       EMAIL_USER: ${EMAIL_USER}
       EMAIL_PASSWORD: ${EMAIL_PASSWORD}
       EMAIL_FROM: ${EMAIL_FROM}
-      APP_URL: ${APP_URL:-http://localhost:3000}
-      APP_DOMAIN: ${APP_DOMAIN:-http://localhost:3000}
+      APP_URL: ${APP_URL:-http://localhost:3001}
+      APP_DOMAIN: ${APP_DOMAIN:-http://localhost:3001}
       APP_NAME: ${APP_NAME:-ProjectHub AI Assistant}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       OPENROUTER_DEFAULT_MODEL: ${OPENROUTER_DEFAULT_MODEL:-anthropic/claude-opus-4.5}
       OPENROUTER_FALLBACK_MODEL: ${OPENROUTER_FALLBACK_MODEL:-anthropic/claude-3.5-sonnet}
@@ -108,7 +109,7 @@ services:
       QDRANT_API_KEY: ${QDRANT_API_KEY:-}
       VECTOR_DIMENSIONS: ${VECTOR_DIMENSIONS:-384}
       WS_PORT: ${WS_PORT:-3002}
-      WS_CORS_ORIGIN: ${WS_CORS_ORIGIN:-http://localhost:3001}
+      WS_CORS_ORIGIN: ${WS_CORS_ORIGIN:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
@@ -119,7 +120,38 @@ services:
     volumes:
       - ./logs:/app/logs
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})\""]
+      test: [ "CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})\"" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - projecthub-network
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+        NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-your-secret-key}
+        NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+    container_name: projecthub-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-your-secret-key}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    healthcheck:
+      test: [ 'CMD', 'curl', '-f', 'http://localhost:3000/api/health' ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -131,6 +163,7 @@ volumes:
   postgres_data:
   redis_data:
   qdrant_data:
+
 
 networks:
   projecthub-network:
