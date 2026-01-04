@@ -29,6 +29,7 @@
     "migration:run": "npm run typeorm -- migration:run",
     "migration:run:prod": "npm run typeorm -- migration:run",
     "seed:supervisor": "ts-node src/database/seeds/simple-supervisor-seed.ts",
+    "seed:ai-models": "ts-node -r tsconfig-paths/register src/scripts/seed-ai-models.ts",
     "migration:revert": "npm run typeorm -- migration:revert",
     "seed:milestones": "ts-node -r tsconfig-paths/register src/seeds/milestone-seeder.ts",
     "milestone:dev-cli": "ts-node -r tsconfig-paths/register src/utils/milestone-dev-cli.ts",
@@ -65,7 +66,15 @@
     "benchmark:recommendations:ab": "npm run benchmark:recommendations -- --ab-test",
     "benchmark:recommendations:full": "npm run benchmark:recommendations -- --load-test --ab-test",
     "test:vector-setup": "ts-node -r tsconfig-paths/register scripts/test-vector-setup.ts",
-    "test:vector-minimal": "ts-node -r tsconfig-paths/register scripts/test-vector-minimal.ts"
+    "test:vector-minimal": "ts-node -r tsconfig-paths/register scripts/test-vector-minimal.ts",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:dev": "docker-compose -f docker-compose.dev.yml up",
+    "docker:dev:down": "docker-compose -f docker-compose.dev.yml down",
+    "docker:restart": "docker-compose restart backend",
+    "docker:clean": "docker-compose down -v"
   },
   "dependencies": {
     "@huggingface/inference": "^4.8.0",
