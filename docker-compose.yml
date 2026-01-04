@@ -1,23 +1,137 @@
 version: '3.8'
 
 services:
+  # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
-    container_name: fyp_postgres
+    image: postgres:16-alpine
+    container_name: projecthub-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: fyp_platform
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-projecthub}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
     ports:
-      - '5432:5432'
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-projecthub}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - projecthub-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: projecthub-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - projecthub-network
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: projecthub-qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:6333/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - projecthub-network
+
+  # ProjectHub Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: projecthub-backend
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-projecthub}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USER: ${EMAIL_USER}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      APP_DOMAIN: ${APP_DOMAIN:-http://localhost:3000}
+      APP_NAME: ${APP_NAME:-ProjectHub AI Assistant}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENROUTER_DEFAULT_MODEL: ${OPENROUTER_DEFAULT_MODEL:-anthropic/claude-opus-4.5}
+      OPENROUTER_FALLBACK_MODEL: ${OPENROUTER_FALLBACK_MODEL:-anthropic/claude-3.5-sonnet}
+      OPENROUTER_MONTHLY_BUDGET: ${OPENROUTER_MONTHLY_BUDGET:-100}
+      OPENROUTER_MAX_COST_PER_REQUEST: ${OPENROUTER_MAX_COST_PER_REQUEST:-0.50}
+      OPENROUTER_MAX_TOKENS: ${OPENROUTER_MAX_TOKENS:-4096}
+      HUGGING_FACE_API_KEY: ${HUGGING_FACE_API_KEY}
+      HUGGING_FACE_MODEL: ${HUGGING_FACE_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+      HUGGING_FACE_QA_MODEL: ${HUGGING_FACE_QA_MODEL:-distilbert-base-cased-distilled-squad}
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      VECTOR_DIMENSIONS: ${VECTOR_DIMENSIONS:-384}
+      WS_PORT: ${WS_PORT:-3002}
+      WS_CORS_ORIGIN: ${WS_CORS_ORIGIN:-http://localhost:3001}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - projecthub-network
 
 volumes:
   postgres_data:
+  redis_data:
+  qdrant_data:
+
+networks:
+  projecthub-network:
+    driver: bridge

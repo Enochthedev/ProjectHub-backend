@@ -66,7 +66,15 @@
     "benchmark:recommendations:ab": "npm run benchmark:recommendations -- --ab-test",
     "benchmark:recommendations:full": "npm run benchmark:recommendations -- --load-test --ab-test",
     "test:vector-setup": "ts-node -r tsconfig-paths/register scripts/test-vector-setup.ts",
-    "test:vector-minimal": "ts-node -r tsconfig-paths/register scripts/test-vector-minimal.ts"
+    "test:vector-minimal": "ts-node -r tsconfig-paths/register scripts/test-vector-minimal.ts",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:dev": "docker-compose -f docker-compose.dev.yml up",
+    "docker:dev:down": "docker-compose -f docker-compose.dev.yml down",
+    "docker:restart": "docker-compose restart backend",
+    "docker:clean": "docker-compose down -v"
   },
   "dependencies": {
     "@huggingface/inference": "^4.8.0",
