@@ -25,6 +25,9 @@ export class AIApiUsage {
   @Column({ type: 'int' })
   responseTimeMs: number;
 
+  @Column({ type: 'numeric', precision: 10, scale: 6, default: 0 })
+  cost: number;
+
   @Column({ type: 'boolean', default: true })
   success: boolean;
 
@@ -63,6 +66,7 @@ export class AIApiUsage {
     model: string;
     tokensUsed: number;
     responseTimeMs: number;
+    cost: number;
     success: boolean;
     timestamp: Date;
   } {
@@ -71,8 +75,13 @@ export class AIApiUsage {
       model: this.model,
       tokensUsed: this.tokensUsed,
       responseTimeMs: this.responseTimeMs,
+      cost: Number(this.cost),
       success: this.success,
       timestamp: this.createdAt,
     };
+  }
+
+  getCostInDollars(): string {
+    return `$${Number(this.cost).toFixed(6)}`;
   }
 }

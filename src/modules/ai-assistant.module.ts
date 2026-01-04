@@ -17,6 +17,8 @@ import { AdminAuditLog } from '../entities/admin-audit-log.entity';
 import { ResponseTemplate } from '../entities/response-template.entity';
 import { MessageRating } from '../entities/message-rating.entity';
 import { AIApiUsage } from '../entities/ai-api-usage.entity';
+import { AIModelPricing } from '../entities/ai-model-pricing.entity';
+import { AIModelPerformance } from '../entities/ai-model-performance.entity';
 import { User } from '../entities/user.entity';
 import { Project } from '../entities/project.entity';
 import { SupervisorProfile } from '../entities/supervisor-profile.entity';
@@ -52,6 +54,7 @@ import { LocalEmbeddingService } from '../services/local-embedding.service';
 import { EmbeddingService } from '../services/embedding.service';
 import { SimilarityService } from '../services/similarity.service';
 import { RecommendationCacheService } from '../services/recommendation-cache.service';
+import { AIModelConfigService } from '../services/ai-model-config.service';
 
 // Common services
 import { CommonModule } from '../common/common.module';
@@ -68,6 +71,8 @@ import { CommonModule } from '../common/common.module';
       ResponseTemplate,
       MessageRating,
       AIApiUsage,
+      AIModelPricing,
+      AIModelPerformance,
       User,
       Project,
       SupervisorProfile,
@@ -118,6 +123,7 @@ import { CommonModule } from '../common/common.module';
     EmbeddingService,
     SimilarityService,
     RecommendationCacheService,
+    AIModelConfigService,
   ],
   exports: [
     // Export services that might be used by other modules
@@ -133,6 +139,7 @@ import { CommonModule } from '../common/common.module';
     MilestoneGuidanceService,
     AIErrorHandlerService,
     AIAssistantErrorRecoveryService,
+    AIModelConfigService,
   ],
 })
 export class AIAssistantModule {}

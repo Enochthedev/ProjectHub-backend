@@ -29,6 +29,7 @@
     "migration:run": "npm run typeorm -- migration:run",
     "migration:run:prod": "npm run typeorm -- migration:run",
     "seed:supervisor": "ts-node src/database/seeds/simple-supervisor-seed.ts",
+    "seed:ai-models": "ts-node -r tsconfig-paths/register src/scripts/seed-ai-models.ts",
     "migration:revert": "npm run typeorm -- migration:revert",
     "seed:milestones": "ts-node -r tsconfig-paths/register src/seeds/milestone-seeder.ts",
     "milestone:dev-cli": "ts-node -r tsconfig-paths/register src/utils/milestone-dev-cli.ts",
