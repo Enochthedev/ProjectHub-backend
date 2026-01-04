@@ -62,7 +62,7 @@ export class ConversationSimulatorService {
     private readonly knowledgeRepository: Repository<KnowledgeBaseEntry>,
     @InjectRepository(ResponseTemplate)
     private readonly templateRepository: Repository<ResponseTemplate>,
-  ) {}
+  ) { }
 
   /**
    * Run a conversation simulation scenario
@@ -618,7 +618,6 @@ You can also contact your supervisor for personalized guidance.`;
   ): Promise<ConversationMessage> {
     const message = this.messageRepository.create({
       conversation,
-      conversationId: conversation.id,
       type,
       content,
       metadata: metadata || {},
@@ -689,7 +688,7 @@ You can also contact your supervisor for personalized guidance.`;
     conversation: Conversation,
   ): Promise<void> {
     // Remove messages
-    await this.messageRepository.delete({ conversationId: conversation.id });
+    await this.messageRepository.delete({ conversation: { id: conversation.id } });
 
     // Remove conversation
     await this.conversationRepository.remove(conversation);

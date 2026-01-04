@@ -44,7 +44,7 @@ export class MessageManagementService {
     private readonly conversationRepository: Repository<Conversation>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-  ) {}
+  ) { }
 
   /**
    * Get a message by ID with ownership validation
@@ -376,7 +376,7 @@ export class MessageManagementService {
 
     // Apply filters
     if (searchDto.conversationId) {
-      queryBuilder.andWhere('message.conversationId = :conversationId', {
+      queryBuilder.andWhere('conversation.id = :conversationId', {
         conversationId: searchDto.conversationId,
       });
     }
@@ -468,10 +468,20 @@ export class MessageManagementService {
    * Map entity to response DTO
    */
   private mapToResponseDto(message: ConversationMessage): MessageResponseDto {
+    // Transform message type to match frontend expectations
+    let transformedType: any = message.type;
+    if (message.type === MessageType.USER_QUERY) {
+      transformedType = 'user' as any;
+    } else if (message.type === MessageType.AI_RESPONSE || message.type === MessageType.TEMPLATE_RESPONSE) {
+      transformedType = 'assistant' as any;
+    } else if (message.type === MessageType.SYSTEM_MESSAGE) {
+      transformedType = 'system' as any;
+    }
+
     return {
       id: message.id,
-      conversationId: message.conversationId,
-      type: message.type,
+      conversationId: message.conversation?.id,
+      type: transformedType,
       content: message.content,
       metadata: message.metadata || undefined,
       confidenceScore: message.confidenceScore || undefined,

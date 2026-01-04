@@ -81,7 +81,7 @@ export class ContextService {
     private readonly milestoneRepository: Repository<Milestone>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-  ) {}
+  ) { }
 
   /**
    * Build comprehensive conversation context incorporating project and milestone information
@@ -287,7 +287,7 @@ export class ContextService {
     conversationId: string,
   ): Promise<ConversationHistoryContext> {
     const messages = await this.messageRepository.find({
-      where: { conversationId },
+      where: { conversation: { id: conversationId } },
       order: { createdAt: 'DESC' },
       take: this.CONTEXT_WINDOW_MESSAGES,
     });
@@ -348,7 +348,7 @@ export class ContextService {
    */
   async summarizeConversation(conversationId: string): Promise<string> {
     const messages = await this.messageRepository.find({
-      where: { conversationId },
+      where: { conversation: { id: conversationId } },
       order: { createdAt: 'ASC' },
     });
 
@@ -416,7 +416,7 @@ export class ContextService {
     // This is a basic implementation - could be enhanced with actual phase tracking
     const daysSinceCreation = Math.floor(
       (new Date().getTime() - new Date(project.createdAt).getTime()) /
-        (1000 * 60 * 60 * 24),
+      (1000 * 60 * 60 * 24),
     );
 
     if (daysSinceCreation < 30) {

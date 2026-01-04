@@ -323,6 +323,15 @@ export class ConversationService {
   }
 
   /**
+   * Update conversation title
+   */
+  async updateTitle(conversationId: string, title: string): Promise<Conversation> {
+    const conversation = await this.getConversationById(conversationId);
+    conversation.title = title;
+    return this.conversationRepository.save(conversation);
+  }
+
+  /**
    * Delete a conversation and all its messages
    */
   async deleteConversation(conversationId: string): Promise<void> {
@@ -333,7 +342,7 @@ export class ConversationService {
     }
 
     // Delete all messages first (cascade should handle this, but being explicit)
-    await this.messageRepository.delete({ conversationId });
+    await this.messageRepository.delete({ conversation: { id: conversationId } });
 
     // Delete the conversation
     await this.conversationRepository.delete(conversationId);
@@ -377,7 +386,7 @@ export class ConversationService {
     }
 
     const message = this.messageRepository.create({
-      conversationId,
+      conversation: conversation,
       type: messageData.type,
       content: messageData.content,
       metadata: messageData.metadata || null,
@@ -385,16 +394,17 @@ export class ConversationService {
       sources: messageData.sources || [],
     });
 
-    const savedMessage = await this.messageRepository.save(message);
-
-    // Update conversation last activity
+    // Add to conversation messages and save conversation (cascade)
+    conversation.messages.push(message);
     conversation.updateLastActivity();
+
+    // We save the conversation, which cascades the new message insert
     await this.conversationRepository.save(conversation);
 
     // Invalidate conversation cache since new message was added
     await this.cacheService.invalidateConversationCache(conversationId);
 
-    return savedMessage;
+    return message;
   }
 
   /**

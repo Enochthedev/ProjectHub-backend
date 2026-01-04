@@ -1,6 +1,7 @@
 import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { config } from 'dotenv';
+import { SnakeNamingStrategy } from './snake-naming.strategy';
 
 config();
 
@@ -20,6 +21,7 @@ if (databaseUrl) {
     migrations: [__dirname + '/../migrations/*{.ts,.js}'],
     synchronize: false,
     logging: configService.get('NODE_ENV') === 'development',
+    namingStrategy: new SnakeNamingStrategy(),
     ssl: {
       rejectUnauthorized: false, // Required for Render PostgreSQL
     },
@@ -37,6 +39,7 @@ if (databaseUrl) {
     migrations: [__dirname + '/../migrations/*{.ts,.js}'],
     synchronize: false,
     logging: configService.get('NODE_ENV') === 'development',
+    namingStrategy: new SnakeNamingStrategy(),
   };
 }
 

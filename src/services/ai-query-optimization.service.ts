@@ -68,7 +68,7 @@ export class AIQueryOptimizationService {
     private readonly messageRepository: Repository<ConversationMessage>,
     @InjectRepository(KnowledgeBaseEntry)
     private readonly knowledgeRepository: Repository<KnowledgeBaseEntry>,
-  ) {}
+  ) { }
 
   /**
    * Optimized conversation search with intelligent query building
@@ -227,7 +227,7 @@ export class AIQueryOptimizationService {
     // Get recent messages efficiently (last 10 messages)
     const recentMessages = await this.messageRepository
       .createQueryBuilder('message')
-      .where('message.conversationId = :conversationId', { conversationId })
+      .where('message.conversation = :conversationId', { conversationId })
       .orderBy('message.createdAt', 'DESC')
       .limit(10)
       .getMany();
@@ -435,7 +435,7 @@ export class AIQueryOptimizationService {
     options: MessageQueryOptions,
   ): void {
     if (options.conversationIds && options.conversationIds.length > 0) {
-      queryBuilder.andWhere('message.conversationId IN (:...conversationIds)', {
+      queryBuilder.andWhere('message.conversation IN (:...conversationIds)', {
         conversationIds: options.conversationIds,
       });
     }

@@ -23,8 +23,8 @@ export class ConversationMessage {
   @JoinColumn({ name: 'conversation_id' })
   conversation: Conversation;
 
-  @Column({ name: 'conversation_id' })
-  conversationId: string;
+  //   @Column({ name: 'conversation_id' })
+  //   conversationId: string;
 
   @Column({
     type: 'enum',
@@ -38,13 +38,13 @@ export class ConversationMessage {
   @Column({ type: 'jsonb', nullable: true })
   metadata: MessageMetadata | null;
 
-  @Column({ type: 'decimal', precision: 3, scale: 2, nullable: true })
+  @Column({ name: 'confidence_score', type: 'decimal', precision: 3, scale: 2, nullable: true })
   confidenceScore: number | null;
 
   @Column({ type: 'text', array: true, default: '{}' })
   sources: string[];
 
-  @Column({ default: false })
+  @Column({ name: 'is_bookmarked', default: false })
   isBookmarked: boolean;
 
   @Column({
@@ -57,13 +57,13 @@ export class ConversationMessage {
   @OneToMany(() => MessageRating, (rating) => rating.message, { cascade: true })
   ratings: MessageRating[];
 
-  @Column({ type: 'decimal', precision: 3, scale: 2, default: 0.0 })
+  @Column({ name: 'average_rating', type: 'decimal', precision: 3, scale: 2, default: 0.0 })
   averageRating: number;
 
-  @Column({ type: 'integer', default: 0 })
+  @Column({ name: 'rating_count', type: 'integer', default: 0 })
   ratingCount: number;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
   // Helper methods for message management

@@ -299,14 +299,15 @@ export class OpenRouterService {
                 const endTime = Date.now();
                 const responseTime = endTime - startTime;
                 const actualCost = response.cost || modelSelection.estimatedCost;
+                const totalTokens = response.usage?.totalTokens || 0;
 
                 // Track successful usage in database
-                await this.trackUsage(modelSelection.modelId, response.usage.totalTokens, actualCost, responseTime, userId, true);
+                await this.trackUsage(modelSelection.modelId, totalTokens, actualCost, responseTime, userId, true);
                 await this.modelConfigService.recordModelUsage(
                     modelSelection.modelId,
                     responseTime,
                     actualCost,
-                    response.usage.totalTokens,
+                    totalTokens,
                     true
                 );
 
@@ -528,6 +529,7 @@ export class OpenRouterService {
             model: modelSelection.modelId,
             maxTokens: request.maxTokens || Math.min(this.config.maxTokens, modelSelection.maxTokens)
         };
+
 
         const response = await fetch(`${this.baseUrl}/chat/completions`, {
             method: 'POST',

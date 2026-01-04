@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { useTouchDevice, useReducedMotion } from '@/hooks/useResponsive';
@@ -11,15 +13,15 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ 
-    className, 
-    variant = 'primary', 
-    size = 'md', 
+  ({
+    className,
+    variant = 'primary',
+    size = 'md',
     loading = false,
     fullWidth = false,
     disabled,
-    children, 
-    ...props 
+    children,
+    ...props
   }, ref) => {
     const isTouchDevice = useTouchDevice();
     const prefersReducedMotion = useReducedMotion();
@@ -37,7 +39,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       'active:scale-95 touch:active:scale-95',
       prefersReducedMotion && 'active:scale-100 touch:active:scale-100'
     );
-    
+
     const variants = {
       primary: cn(
         'bg-black text-white border-black',
@@ -87,7 +89,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {loading && (
-          <div 
+          <div
             className={cn(
               'mr-2 h-4 w-4 rounded-full border-2 border-current border-t-transparent',
               prefersReducedMotion ? '' : 'animate-spin'
