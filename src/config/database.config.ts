@@ -1,5 +1,6 @@
 import { registerAs } from '@nestjs/config';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { SnakeNamingStrategy } from './snake-naming.strategy';
 
 export default registerAs(
   'database',
@@ -15,6 +16,7 @@ export default registerAs(
     synchronize: false,
     logging: process.env.NODE_ENV === 'development',
     ssl: false,
+    namingStrategy: new SnakeNamingStrategy(),
     // Connection retry configuration
     retryAttempts: 3,
     retryDelay: 3000,

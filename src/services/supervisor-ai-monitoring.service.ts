@@ -35,7 +35,7 @@ export class SupervisorAIMonitoringService {
     private readonly projectRepository: Repository<Project>,
     @InjectRepository(SupervisorProfile)
     private readonly supervisorProfileRepository: Repository<SupervisorProfile>,
-  ) {}
+  ) { }
 
   async getStudentInteractionsOverview(
     supervisorId: string,
@@ -84,9 +84,9 @@ export class SupervisorAIMonitoringService {
     const overallAverageConfidence =
       studentSummaries.length > 0
         ? studentSummaries.reduce(
-            (sum, s) => sum + s.averageConfidenceScore,
-            0,
-          ) / studentSummaries.length
+          (sum, s) => sum + s.averageConfidenceScore,
+          0,
+        ) / studentSummaries.length
         : 0;
 
     return {
@@ -333,7 +333,7 @@ export class SupervisorAIMonitoringService {
         'AVG(message.averageRating) as avg_rating',
         'MAX(message.createdAt) as last_interaction',
       ])
-      .where('message.conversationId IN (:...conversationIds)', {
+      .where('message.conversation IN (:...conversationIds)', {
         conversationIds,
       })
       .getRawOne();
@@ -342,7 +342,7 @@ export class SupervisorAIMonitoringService {
     const categoryStats = await this.messageRepository
       .createQueryBuilder('message')
       .select("message.metadata->'category' as category, COUNT(*) as count")
-      .where('message.conversationId IN (:...conversationIds)', {
+      .where('message.conversation IN (:...conversationIds)', {
         conversationIds,
       })
       .andWhere("message.metadata->'category' IS NOT NULL")
@@ -422,7 +422,7 @@ export class SupervisorAIMonitoringService {
       // Get corresponding AI response for confidence and rating
       const aiResponse = await this.messageRepository.findOne({
         where: {
-          conversationId: message.conversationId,
+          conversation: { id: message.conversation.id },
           type: MessageType.AI_RESPONSE,
         },
         order: { createdAt: 'ASC' },
@@ -448,13 +448,13 @@ export class SupervisorAIMonitoringService {
       const avgConfidence =
         group.confidenceScores.length > 0
           ? group.confidenceScores.reduce((sum, score) => sum + score, 0) /
-            group.confidenceScores.length
+          group.confidenceScores.length
           : 0;
 
       const avgRating =
         group.ratings.length > 0
           ? group.ratings.reduce((sum, rating) => sum + rating, 0) /
-            group.ratings.length
+          group.ratings.length
           : 0;
 
       const needsAttention = avgConfidence < 0.5 || avgRating < 3.0;
@@ -510,7 +510,7 @@ export class SupervisorAIMonitoringService {
   ): Promise<EscalatedConversationDto> {
     // Get conversation messages for analysis
     const messages = await this.messageRepository.find({
-      where: { conversationId: conversation.id },
+      where: { conversation: { id: conversation.id } },
       order: { createdAt: 'DESC' },
       take: 10,
     });
@@ -524,7 +524,7 @@ export class SupervisorAIMonitoringService {
     const avgConfidence =
       aiMessages.length > 0
         ? aiMessages.reduce((sum, m) => sum + (m.confidenceScore || 0), 0) /
-          aiMessages.length
+        aiMessages.length
         : 0;
 
     // Determine escalation reason and priority

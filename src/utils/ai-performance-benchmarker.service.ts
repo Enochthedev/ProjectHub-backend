@@ -80,7 +80,7 @@ export class AIPerformanceBenchmarkerService {
     private readonly messageRepository: Repository<ConversationMessage>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-  ) {}
+  ) { }
 
   /**
    * Run a performance benchmark
@@ -683,7 +683,6 @@ export class AIPerformanceBenchmarkerService {
   ): Promise<ConversationMessage> {
     const message = this.messageRepository.create({
       conversation,
-      conversationId: conversation.id,
       type,
       content,
       metadata: metadata || {},
@@ -744,7 +743,7 @@ export class AIPerformanceBenchmarkerService {
     conversation: Conversation,
   ): Promise<void> {
     // Remove messages
-    await this.messageRepository.delete({ conversationId: conversation.id });
+    await this.messageRepository.delete({ conversation: { id: conversation.id } });
 
     // Remove conversation
     await this.conversationRepository.remove(conversation);

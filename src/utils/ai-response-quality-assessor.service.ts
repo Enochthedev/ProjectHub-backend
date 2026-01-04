@@ -62,7 +62,7 @@ export class AIResponseQualityAssessorService {
     private readonly messageRepository: Repository<ConversationMessage>,
     @InjectRepository(KnowledgeBaseEntry)
     private readonly knowledgeRepository: Repository<KnowledgeBaseEntry>,
-  ) {}
+  ) { }
 
   /**
    * Assess the quality of a single AI response
@@ -796,7 +796,7 @@ export class AIResponseQualityAssessorService {
     return (
       (await this.messageRepository.findOne({
         where: {
-          conversationId: message.conversationId,
+          conversation: { id: message.conversation?.id },
           type: MessageType.USER_QUERY,
         },
         order: { createdAt: 'DESC' },

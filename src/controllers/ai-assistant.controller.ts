@@ -67,7 +67,7 @@ import {
   MessageResponseDto,
   MessageSearchDto,
 } from '../dto/message';
-import { ConversationStatus, UserRole } from '../common/enums';
+import { ConversationStatus, UserRole, MessageType } from '../common/enums';
 
 @ApiTags('AI Assistant')
 @Controller('ai-assistant')
@@ -310,20 +310,59 @@ export class AIAssistantController {
     @Request() req: any,
     @Body() askDto: AskQuestionDto,
   ): Promise<AssistantResponseDto> {
+    const conversationId = askDto.conversationId;
+    if (!conversationId) {
+      throw new Error('Conversation ID is required');
+    }
+
+    // 1. Save User Query
+    await this.conversationService.addMessage(conversationId, {
+      type: MessageType.USER_QUERY,
+      content: askDto.query,
+    });
+
+    // 2. Generate AI Response
     const response = await this.aiResponseService.generateResponse({
       query: askDto.query,
-      conversationId: askDto.conversationId || '',
+      conversationId: conversationId,
       userId: req.user.id,
       language: askDto.language,
       includeProjectContext: askDto.includeProjectContext,
     });
 
+    // 3. Save AI Response
+    const savedAiMessage = await this.conversationService.addMessage(conversationId, {
+      type: MessageType.AI_RESPONSE,
+      content: response.response,
+      metadata: response.metadata,
+      confidenceScore: response.confidenceScore,
+      sources: response.sources
+    });
+
+    // 4. Update Title if appropriate (early conversation or generic title)
+    try {
+      const conversation = await this.conversationService.getConversationById(conversationId);
+      const isGenericTitle = ['New Chat', 'New Conversation', 'Untitled'].includes(conversation.title);
+
+      // Update title if it's generic or we don't have many messages yet (refining topic)
+      const keywords = response.metadata.keywords;
+      if ((isGenericTitle || conversation.messages.length <= 4) && keywords && keywords.length > 0) {
+        const potentialTitle = keywords.slice(0, 3).join(' ').replace(/\b\w/g, l => l.toUpperCase());
+        if (potentialTitle.length >= 3) {
+          await this.conversationService.updateTitle(conversationId, potentialTitle);
+        }
+      }
+    } catch (error) {
+      // Non-blocking error for title update
+      console.warn('Failed to update conversation title:', error.message);
+    }
+
     return {
       response: response.response,
       confidenceScore: response.confidenceScore,
       sources: response.sources,
-      conversationId: askDto.conversationId || '',
-      messageId: '', // Will be set by the service
+      conversationId: conversationId,
+      messageId: savedAiMessage.id,
       fromAI: true,
       suggestedFollowUps: response.suggestedFollowUps,
       escalationSuggestion: response.requiresHumanReview
@@ -876,20 +915,32 @@ export class AIAssistantController {
       projectId: conversation.projectId,
       language: conversation.language,
       messageCount: conversation.messages?.length || 0,
-      messages: conversation.messages?.slice(-5).map((msg: any) => ({
-        id: msg.id,
-        conversationId: msg.conversationId,
-        type: msg.type,
-        content: msg.content,
-        metadata: msg.metadata,
-        confidenceScore: msg.confidenceScore,
-        sources: msg.sources || [],
-        isBookmarked: msg.isBookmarked,
-        status: msg.status,
-        averageRating: msg.averageRating || 0,
-        ratingCount: msg.ratingCount || 0,
-        createdAt: msg.createdAt,
-      })),
+      messages: conversation.messages?.slice(-5).map((msg: any) => {
+        // Transform message type to match frontend expectations
+        let transformedType: any = msg.type;
+        if (msg.type === MessageType.USER_QUERY) {
+          transformedType = 'user';
+        } else if (msg.type === MessageType.AI_RESPONSE || msg.type === MessageType.TEMPLATE_RESPONSE) {
+          transformedType = 'assistant';
+        } else if (msg.type === MessageType.SYSTEM_MESSAGE) {
+          transformedType = 'system';
+        }
+
+        return {
+          id: msg.id,
+          conversationId: msg.conversationId,
+          type: transformedType,
+          content: msg.content,
+          metadata: msg.metadata,
+          confidenceScore: msg.confidenceScore,
+          sources: msg.sources || [],
+          isBookmarked: msg.isBookmarked,
+          status: msg.status,
+          averageRating: msg.averageRating || 0,
+          ratingCount: msg.ratingCount || 0,
+          createdAt: msg.createdAt,
+        };
+      }),
       context: conversation.context,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,

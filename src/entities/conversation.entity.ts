@@ -55,13 +55,13 @@ export class Conversation {
   @Column({ type: 'varchar', length: 10, default: 'en' })
   language: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @Column({ nullable: true, type: 'timestamp' })
+  @Column({ name: 'last_message_at', nullable: true, type: 'timestamp' })
   lastMessageAt: Date | null;
 
   // Helper methods for conversation lifecycle management
