@@ -24,6 +24,7 @@ import { TokenManagementService } from './services/token-management.service';
 import { TokenPair } from './interfaces/token.interface';
 import { UserRole } from '../common/enums/user-role.enum';
 import { NotificationService } from '../services/notification.service';
+import { StudentOnboardingService } from '../services/student-onboarding.service';
 
 @Injectable()
 export class AuthService {
@@ -44,6 +45,8 @@ export class AuthService {
     private readonly configService: ConfigService,
     @Inject(forwardRef(() => NotificationService))
     private readonly notificationService?: NotificationService, // Optional to avoid circular dependency
+    @Inject(forwardRef(() => StudentOnboardingService))
+    private readonly studentOnboardingService?: StudentOnboardingService, // Optional to avoid circular dependency
   ) { }
 
   /**
@@ -493,6 +496,20 @@ export class AuthService {
         });
         await this.studentProfileRepository.save(studentProfile);
         this.logger.log(`Created student profile for user: ${user.email}`);
+
+        // Initialize default projects and recommendations for new students
+        if (this.studentOnboardingService) {
+          // Run asynchronously without blocking registration
+          this.studentOnboardingService
+            .initializeStudentProjects(user.id)
+            .catch((error) => {
+              this.logger.error(
+                `Failed to initialize projects for student ${user.email}:`,
+                error,
+              );
+              // Don't throw - this is a non-critical operation
+            });
+        }
       } else if (user.role === UserRole.SUPERVISOR) {
         const supervisorProfile = this.supervisorProfileRepository.create({
           user,

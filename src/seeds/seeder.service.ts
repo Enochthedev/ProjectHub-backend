@@ -386,6 +386,45 @@ export class SeederService {
     }
 
     const projectsData = [
+      // Onboarding Project (Special - Always Available)
+      {
+        title: '🎓 Getting Started with ProjectHub - Your First Project',
+        abstract:
+          'Welcome to ProjectHub! This is a special onboarding project designed to help you understand how the platform works. This project guides you through:\n\n' +
+          '✅ Browsing and discovering research projects\n' +
+          '✅ Using the AI Assistant to get help with your research\n' +
+          '✅ Understanding project requirements and difficulty levels\n' +
+          '✅ Learning about different specializations and technology stacks\n' +
+          '✅ Applying to projects and managing your applications\n' +
+          '✅ Tracking your progress with milestones\n\n' +
+          'This project is available to all students as a learning resource. Feel free to bookmark it and use the AI Assistant to ask questions about the platform, research methodologies, or academic requirements. The AI Assistant is powered by Claude Opus 4.5 and can provide guidance on project selection, proposal writing, and research best practices.',
+        specialization: 'Software Engineering & Architecture',
+        difficultyLevel: DifficultyLevel.BEGINNER,
+        year: 2024,
+        tags: [
+          'Onboarding',
+          'Tutorial',
+          'Getting Started',
+          'Platform Guide',
+          'AI Assistant',
+          'Research Guidance',
+          'Academic Support',
+        ],
+        technologyStack: [
+          'Next.js',
+          'TypeScript',
+          'NestJS',
+          'PostgreSQL',
+          'AI Integration',
+          'Vector Database',
+        ],
+        isGroupProject: false,
+        githubUrl: 'https://github.com/ui-fyp/projecthub-platform',
+        demoUrl: 'https://projecthub.ui.edu.ng',
+        notes:
+          'This is a special onboarding project for new students. Use the AI Assistant tab to ask questions about research proposals, project requirements, supervisor selection, and platform features. Example questions: "How do I write a research proposal?", "What specialization should I choose?", "How does the AI Assistant work?"',
+      },
+
       // AI & Machine Learning Projects
       {
         title: 'Intelligent Student Performance Prediction System',

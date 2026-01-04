@@ -25,6 +25,7 @@ import { AdminAuditService } from './services/admin-audit.service';
 import { AdminSecurityService } from './services/admin-security.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { NotificationModule } from '../modules/notification.module';
+import { ProjectModule } from '../modules/project.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { NotificationModule } from '../modules/notification.module';
     JwtModule.register({}), // Configuration will be handled by JwtTokenService
     TypeOrmModule.forFeature([User, StudentProfile, SupervisorProfile, AuditLog, AdminAuditLog, RefreshToken, EmailDelivery]),
     forwardRef(() => NotificationModule), // Forward reference to avoid circular dependency
+    forwardRef(() => ProjectModule), // For student onboarding project recommendations
   ],
   controllers: [AuthController, EmailTestController],
   providers: [
